@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Manual Add · Attack Scanner{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h2>Add attack manually</h2>
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+  <form method="post" action="/attacks/new" class="stack-form">
+    <label>Type<select name="attack_type"><option value="battle">battle</option><option value="covert_ops">covert_ops</option></select></label>
+    <label>Attacker name<input type="text" name="attacker_name" required></label>
+    <label>Attacker alliance tag<input type="text" name="attacker_alliance_tag"></label>
+    <label>Defender name<input type="text" name="defender_name"></label>
+    <label>Defender alliance tag<input type="text" name="defender_alliance_tag"></label>
+    <label>Server ID<input type="number" name="server_id"></label>
+    <label>Date/time text<input type="text" name="occurred_at_text" placeholder="2026-04-21 10:19:11 or 4-21 16:28"></label>
+    <label>Notes<textarea rows="4" name="notes"></textarea></label>
+    <button type="submit">Save</button>
+  </form>
+</section>
+{% endblock %}

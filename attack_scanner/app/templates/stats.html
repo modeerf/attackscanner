@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Stats · Attack Scanner{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Server stats</h2>
+  <form class="search-form" method="get" action="/stats">
+    <input type="number" name="server_id" value="{{ server_id or '' }}" placeholder="Server ID filter">
+    <span></span>
+    <button type="submit">Apply</button>
+  </form>
+  {% if top_alliance %}
+  <p><strong>Alliance with the most distinct attackers:</strong> [{{ top_alliance.attacker_alliance_tag }}] — {{ top_alliance.unique_attackers }} attacker(s), {{ top_alliance.attack_count }} total attack(s).</p>
+  {% endif %}
+</section>
+<section class="grid two">
+  <div class="card">
+    <h3>Top 10 attackers</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Alliance</th><th>Total</th><th>Battle</th><th>Ops</th></tr></thead>
+        <tbody>
+        {% for row in attackers %}
+          <tr><td>{{ loop.index }}</td><td>{{ row.attacker_name }}</td><td>{{ row.attacker_alliance_tag or '—' }}</td><td>{{ row.attack_count }}</td><td>{{ row.battle_count }}</td><td>{{ row.covert_ops_count }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Top alliances</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Alliance</th><th>Unique Attackers</th><th>Total Attacks</th></tr></thead>
+        <tbody>
+        {% for row in alliances %}
+          <tr><td>{{ loop.index }}</td><td>{{ row.attacker_alliance_tag }}</td><td>{{ row.unique_attackers }}</td><td>{{ row.attack_count }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

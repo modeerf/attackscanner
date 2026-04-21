@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Players · Attack Scanner{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Search players</h2>
+  <form class="search-form" method="get" action="/players">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by name">
+    <input type="number" name="server_id" value="{{ server_id or '' }}" placeholder="Server ID">
+    <button type="submit">Search</button>
+  </form>
+</section>
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Alliance</th><th>Server</th><th>Total Events</th></tr></thead>
+      <tbody>
+      {% for player in players %}
+        <tr>
+          <td><a href="/players/{{ player.id }}">{{ player.name }}</a></td>
+          <td>{{ player.current_alliance_tag or '—' }}</td>
+          <td>{{ player.server_id or '—' }}</td>
+          <td>{{ player.total_events }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
