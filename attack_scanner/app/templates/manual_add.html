@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Manual Add · Attack Scanner{% endblock %}
+{% block title %}Manual Add - Last Assylum: Plague Violation Tracker{% endblock %}
 {% block content %}
 <section class="card narrow">
   <h2>Add attack manually</h2>
   {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
-  <form method="post" action="/attacks/new" class="stack-form">
+  <form method="post" action="/attacks/new" enctype="multipart/form-data" class="stack-form">
+    <label>Submitted image<input type="file" name="image" accept="image/*" required></label>
     <label>Type<select name="attack_type"><option value="battle">battle</option><option value="covert_ops">covert_ops</option></select></label>
     <label>Attacker name<input type="text" name="attacker_name" required></label>
     <label>Attacker alliance tag<input type="text" name="attacker_alliance_tag"></label>

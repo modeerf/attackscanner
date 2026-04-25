@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Attack #{{ attack.id }} - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Attack #{{ attack.id }}</h2>
+  {% if attack.deleted_at %}
+  <div class="flash err">Deleted at {{ attack.deleted_at }}{% if attack.delete_reason %}: {{ attack.delete_reason }}{% endif %}</div>
+  {% endif %}
+  <div class="detail-grid">
+    <div>
+      <span class="detail-label">Type</span>
+      <strong>{{ attack.attack_type }}</strong>
+    </div>
+    <div>
+      <span class="detail-label">Server</span>
+      <strong>{{ attack.server_id or '-' }}</strong>
+    </div>
+    <div>
+      <span class="detail-label">When</span>
+      <strong>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</strong>
+    </div>
+    <div>
+      <span class="detail-label">Source</span>
+      <strong>{{ attack.source_kind }}</strong>
+    </div>
+  </div>
+</section>
+
+<section class="grid two">
+  <div class="card">
+    <h3>Attacker</h3>
+    <p>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}</p>
+  </div>
+  <div class="card">
+    <h3>Defender</h3>
+    <p>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}<span class="muted">No defender parsed</span>{% endif %}</p>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Submitted image</h3>
+  {% if image_available %}
+    <div class="image-frame">
+      <a href="/attacks/{{ attack.id }}/image" target="_blank">
+        <img src="/attacks/{{ attack.id }}/image" alt="Submitted image for attack #{{ attack.id }}">
+      </a>
+    </div>
+  {% else %}
+    <p class="muted">No submitted image is available for this record.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h3>Delete record</h3>
+  <form class="delete-form" method="post" action="/attacks/{{ attack.id }}/delete" onsubmit="return confirmDeleteWithPassword(this);">
+    <input type="hidden" name="next_url" value="/">
+    <input type="hidden" name="delete_password" value="">
+    <button class="danger" type="submit">Delete</button>
+  </form>
+</section>
+
+{% if attack.notes %}
+<section class="card">
+  <h3>Notes</h3>
+  <p>{{ attack.notes }}</p>
+</section>
+{% endif %}
+{% endblock %}

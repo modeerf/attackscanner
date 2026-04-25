@@ -1,8 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · Attack Scanner{% endblock %}
+{% block title %}Dashboard - Last Assylum: Plague Violation Tracker{% endblock %}
 {% block content %}
-<section class="grid two">
-  <div class="card">
+<section class="dashboard-scene">
+  <div>
+    <span>Quarantine ledger</span>
+    <h2>Last Assylum: Plague Violation Tracker</h2>
+  </div>
+</section>
+<section class="grid two upload-grid">
+  <div class="card upload-card">
     <h2>Upload battle report</h2>
     <form method="post" action="/upload/attack" enctype="multipart/form-data" class="stack-form">
       <label>Image<input type="file" name="image" accept="image/*" required></label>
@@ -11,7 +17,7 @@
       <button type="submit">Process battle image</button>
     </form>
   </div>
-  <div class="card">
+  <div class="card upload-card">
     <h2>Upload covert ops image</h2>
     <form method="post" action="/upload/ops" enctype="multipart/form-data" class="stack-form">
       <label>Image<input type="file" name="image" accept="image/*" required></label>
@@ -31,15 +37,16 @@
       <tbody>
         {% for attack in attacks %}
         <tr>
-          <td>{{ attack.id }}</td>
+          <td><a href="/attacks/{{ attack.id }}">{{ attack.id }}</a></td>
           <td>{{ attack.attack_type }}</td>
-          <td>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} <span class="muted">[{{ attack.attacker_alliance_tag }}]</span>{% endif %}</td>
-          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} <span class="muted">[{{ attack.defender_alliance_tag }}]</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
-          <td>{{ attack.server_id or '—' }}</td>
+          <td>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}</td>
+          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td>{{ attack.server_id or '-' }}</td>
           <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
           <td>
-            <form method="post" action="/attacks/{{ attack.id }}/delete" onsubmit="return confirm('Delete this attack?');">
+            <form method="post" action="/attacks/{{ attack.id }}/delete" onsubmit="return confirmDeleteWithPassword(this);">
               <input type="hidden" name="next_url" value="/">
+              <input type="hidden" name="delete_password" value="">
               <button class="danger" type="submit">Delete</button>
             </form>
           </td>

@@ -1,24 +1,32 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
+import sqlite3
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Iterable
+from uuid import uuid4
 
 import discord
 from discord.ext import commands
 
 from .db import (
     add_attack,
+    add_image_submission,
     connect,
     find_player_by_name,
+    get_image_submission,
     init_db,
     player_history,
     recent_attacks,
     top_alliances,
     top_attackers,
+    top_attacked_alliances,
 )
 from .parsers import ParseError, ParsedAttackEvent, parse_battle_report, parse_ops_report
 
@@ -26,6 +34,9 @@ LOGGER = logging.getLogger("attack_scanner.discord")
 logging.basicConfig(level=os.getenv("ATTACK_SCANNER_LOG_LEVEL", "INFO"))
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+BASE_DIR = Path(__file__).resolve().parent
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass(slots=True)
@@ -47,9 +58,20 @@ def parse_scan_options(content: str) -> ScanOptions:
     year_match = re.search(r"(?:year|y)\s*[:=]\s*(\d{4})", lowered)
     return ScanOptions(
         report_type=report_type,
-        server_id=int(server_match.group(1)) if server_match else None,
-        year=int(year_match.group(1)) if year_match else None,
+        server_id=int(server_match.group(1)) if server_match else default_server_id(),
+        year=int(year_match.group(1)) if year_match else datetime.now().year,
     )
+
+
+def default_server_id() -> int | None:
+    raw = os.getenv("ATTACK_SCANNER_DEFAULT_SERVER")
+    if not raw:
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        LOGGER.warning("Ignoring invalid ATTACK_SCANNER_DEFAULT_SERVER=%r", raw)
+        return None
 
 
 def build_bot() -> commands.Bot:
@@ -66,12 +88,23 @@ def build_bot() -> commands.Bot:
         LOGGER.info("Logged in as %s", bot.user)
 
     @bot.event
+    async def on_command_error(ctx: commands.Context, error: commands.CommandError) -> None:
+        if isinstance(error, commands.CommandNotFound):
+            return
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply("I need a little more detail for that command. Try `@Bot stats`, `@Bot recent limit=10`, or `@Bot history PlayerName`.")
+            return
+        LOGGER.exception("Discord command failed", exc_info=error)
+        await ctx.reply(f"I could not run that command: {error}")
+
+    @bot.event
     async def on_message(message: discord.Message) -> None:
         if message.author.bot:
             return
 
         mentioned = bot.user is not None and bot.user in message.mentions
         attachments = [a for a in message.attachments if is_image_attachment(a)]
+        context = await bot.get_context(message)
 
         if mentioned and attachments:
             try:
@@ -80,18 +113,30 @@ def build_bot() -> commands.Bot:
                 LOGGER.exception("Failed to process scan message")
                 await message.reply("I hit an unexpected error while processing that image.")
 
+        if mentioned and not attachments and not context.valid:
+            await message.reply("I am online. Try `@Bot stats`, `@Bot recent limit=10`, `@Bot history PlayerName`, or mention me with an image plus `battle` or `ops`.")
+            return
+
         await bot.process_commands(message)
+
+    @bot.command(name="ping", help="Check whether the bot is online.")
+    async def ping_command(ctx: commands.Context) -> None:
+        await ctx.reply("pong")
 
     @bot.command(name="stats", help="Show top attackers and top alliance. Example: @Bot stats server=78")
     async def stats_command(ctx: commands.Context, *, args: str = "") -> None:
-        server_id = extract_named_int(args, "server")
+        server_id = extract_named_int(args, "server", default=default_server_id())
         with connect() as conn:
             attackers = top_attackers(conn, server_id=server_id, limit=10)
             alliances = top_alliances(conn, server_id=server_id, limit=10)
+            attacked_alliances = top_attacked_alliances(conn, server_id=server_id, limit=3)
         lines = []
         if alliances:
             top = alliances[0]
             lines.append(f"Top alliance: **[{top['attacker_alliance_tag']}]** with **{top['unique_attackers']}** attacker(s) and **{top['attack_count']}** recorded attack(s).")
+        if attacked_alliances:
+            top_target = attacked_alliances[0]
+            lines.append(f"Most attacked alliance: **[{top_target['defender_alliance_tag']}]** with **{top_target['attack_count']}** attack(s) received.")
         if attackers:
             lines.append("Top attackers:")
             for idx, row in enumerate(attackers, start=1):
@@ -103,7 +148,7 @@ def build_bot() -> commands.Bot:
 
     @bot.command(name="recent", help="Show recent attacks. Example: @Bot recent limit=10 server=78")
     async def recent_command(ctx: commands.Context, *, args: str = "") -> None:
-        server_id = extract_named_int(args, "server")
+        server_id = extract_named_int(args, "server", default=default_server_id())
         limit = extract_named_int(args, "limit") or 10
         with connect() as conn:
             rows = recent_attacks(conn, limit=min(max(limit, 1), 20), server_id=server_id)
@@ -119,7 +164,7 @@ def build_bot() -> commands.Bot:
 
     @bot.command(name="history", help="Show a player's recent history. Example: @Bot history Holash server=78 limit=10")
     async def history_command(ctx: commands.Context, *, args: str) -> None:
-        server_id = extract_named_int(args, "server")
+        server_id = extract_named_int(args, "server", default=default_server_id())
         limit = extract_named_int(args, "limit") or 10
         player_name = strip_named_ints(args, {"server", "limit"}).strip()
         if not player_name:
@@ -159,9 +204,9 @@ def is_image_attachment(attachment: discord.Attachment) -> bool:
     return any(filename.endswith(ext) for ext in IMAGE_EXTENSIONS)
 
 
-def extract_named_int(text: str, key: str) -> int | None:
+def extract_named_int(text: str, key: str, default: int | None = None) -> int | None:
     match = re.search(rf"(?:^|\s){re.escape(key)}\s*=\s*(\d+)", text, re.IGNORECASE)
-    return int(match.group(1)) if match else None
+    return int(match.group(1)) if match else default
 
 
 def strip_named_ints(text: str, keys: set[str]) -> str:
@@ -183,6 +228,18 @@ def classify_report(data: bytes, options: ScanOptions) -> list[ParsedAttackEvent
         return parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id)
 
 
+def image_hash(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def save_discord_attachment(filename: str | None, data: bytes) -> str:
+    suffix = Path(filename or "discord-upload.png").suffix or ".png"
+    saved_name = f"{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}-{uuid4().hex}{suffix}"
+    path = UPLOADS_DIR / saved_name
+    path.write_bytes(data)
+    return saved_name
+
+
 async def handle_scan_message(message: discord.Message, attachments: list[discord.Attachment]) -> None:
     options = parse_scan_options(message.content)
     saved_lines: list[str] = []
@@ -192,8 +249,18 @@ async def handle_scan_message(message: discord.Message, attachments: list[discor
         for attachment in attachments:
             try:
                 raw = await attachment.read()
+                attachment_hash = image_hash(raw)
+                if get_image_submission(conn, attachment_hash):
+                    error_lines.append(f"{attachment.filename}: this image has already been submitted.")
+                    continue
                 events = await asyncio.to_thread(classify_report, raw, options)
                 created_ids: list[int] = []
+                saved_filename = save_discord_attachment(attachment.filename, raw)
+                try:
+                    add_image_submission(conn, image_hash=attachment_hash, source_filename=saved_filename, source_kind="discord", first_attack_id=None)
+                except sqlite3.IntegrityError:
+                    error_lines.append(f"{attachment.filename}: this image has already been submitted.")
+                    continue
                 for event in events:
                     attack_id = add_attack(
                         conn,
@@ -205,13 +272,16 @@ async def handle_scan_message(message: discord.Message, attachments: list[discor
                         server_id=event.server_id,
                         occurred_at=event.occurred_at,
                         occurred_at_text=event.occurred_at_text,
-                        source_filename=attachment.filename,
+                        source_filename=saved_filename,
                         source_kind="discord",
                         notes=event.notes,
                         parser_confidence=event.parser_confidence,
                         raw_parse_json=event.to_dict(),
+                        source_image_hash=attachment_hash,
                     )
                     created_ids.append(attack_id)
+                if created_ids:
+                    conn.execute("UPDATE image_submissions SET first_attack_id = ? WHERE image_hash = ?", (created_ids[0], attachment_hash))
                 names = ", ".join(event.attacker_name for event in events)
                 saved_lines.append(f"{attachment.filename}: saved {len(created_ids)} event(s) for {names} (IDs: {', '.join(map(str, created_ids))})")
             except Exception as exc:

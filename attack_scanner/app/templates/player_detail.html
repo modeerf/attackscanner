@@ -1,26 +1,28 @@
 {% extends "base.html" %}
-{% block title %}{{ player.name }} · Attack Scanner{% endblock %}
+{% block title %}{{ player.name }} - Last Assylum: Plague Violation Tracker{% endblock %}
 {% block content %}
 <section class="card">
   <h2>{{ player.name }}</h2>
-  <p class="muted">Server: {{ player.server_id or '—' }}{% if player.current_alliance_tag %} · Alliance: [{{ player.current_alliance_tag }}]{% endif %}</p>
+  <p class="muted">Server: {{ player.server_id or '-' }}{% if player.current_alliance_tag %} - Alliance: {{ alliance_badge(player.current_alliance_tag) }}{% endif %}</p>
 </section>
 <section class="card">
   <h3>Attack history</h3>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>When</th><th>Type</th><th>Role</th><th>Other party</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>When</th><th>Type</th><th>Role</th><th>Other party</th><th></th></tr></thead>
       <tbody>
       {% for attack in history %}
         {% set is_attacker = attack.attacker_player_id == player.id %}
         <tr>
+          <td><a href="/attacks/{{ attack.id }}">{{ attack.id }}</a></td>
           <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
           <td>{{ attack.attack_type }}</td>
           <td>{{ 'Attacker' if is_attacker else 'Defender' }}</td>
-          <td>{% if is_attacker %}{{ attack.defender_name or '—' }}{% else %}{{ attack.attacker_name }}{% endif %}</td>
+          <td>{% if is_attacker %}{{ attack.defender_name or '-' }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}{% endif %}</td>
           <td>
-            <form method="post" action="/attacks/{{ attack.id }}/delete" onsubmit="return confirm('Delete this attack?');">
+            <form method="post" action="/attacks/{{ attack.id }}/delete" onsubmit="return confirmDeleteWithPassword(this);">
               <input type="hidden" name="next_url" value="/players/{{ player.id }}">
+              <input type="hidden" name="delete_password" value="">
               <button class="danger" type="submit">Delete</button>
             </form>
           </td>

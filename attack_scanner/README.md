@@ -1,4 +1,4 @@
-# Attack Scanner + Discord Bot
+# Last Assylum: Plague Violation Tracker + Discord Bot
 
 This project now has **two entry points** that share the same parser and SQLite database:
 
@@ -14,8 +14,12 @@ This project now has **two entry points** that share the same parser and SQLite 
 - Search players and view their history.
 - View top 10 attackers.
 - View the alliance with the most distinct attackers.
+- View alliance stats, including top attacking alliances, most attacked alliances, alliance-vs-alliance matchups, and alliance member activity.
+- Click an attack ID to view its details and submitted image.
 - Manually add attacks.
-- Delete attacks.
+- Delete attacks with the moderator password. Deleted records are soft-deleted and can be reviewed at `/admin/deleted`.
+- Manage the hidden server 78 alliance list at `/admin/server78-alliances`; listed alliances display green, all others display red.
+- Automatically soft-delete records older than 30 days using the parsed event time, or creation time if no event time was parsed.
 
 ### Discord bot
 
@@ -24,7 +28,8 @@ This project now has **two entry points** that share the same parser and SQLite 
   - `@Bot stats server=78`
   - `@Bot recent limit=10 server=78`
   - `@Bot history Holash server=78 limit=10`
-- Add `server=78` and `year=2026` to image posts when OCR cannot infer them.
+- Add `server=78` to override the default server for a Discord message.
+- Add `year=2026` to override the current calendar year if OCR cannot infer the year.
 - Include `ops` or `battle` in the post text to force the parser type, otherwise the bot auto-detects.
 
 ## Setup
@@ -51,6 +56,7 @@ Set your token:
 
 ```bash
 export DISCORD_BOT_TOKEN=your-token-here
+export ATTACK_SCANNER_DEFAULT_SERVER=78
 ```
 
 Then start it:
@@ -66,7 +72,7 @@ python -m app.discord_bot
 Post a message like:
 
 ```text
-@AttackScanner ops server=78 year=2026
+@LastAssylumTracker ops server=78 year=2026
 ```
 
 and attach the screenshot.
@@ -74,7 +80,7 @@ and attach the screenshot.
 Or:
 
 ```text
-@AttackScanner battle server=78
+@LastAssylumTracker battle server=78
 ```
 
 with an attack screenshot attached.
@@ -82,13 +88,16 @@ with an attack screenshot attached.
 ### Query data
 
 ```text
-@AttackScanner stats server=78
-@AttackScanner recent limit=10 server=78
-@AttackScanner history GrumblyFeline server=78 limit=10
+@LastAssylumTracker stats server=78
+@LastAssylumTracker recent limit=10 server=78
+@LastAssylumTracker history GrumblyFeline server=78 limit=10
 ```
+
+If `ATTACK_SCANNER_DEFAULT_SERVER` is set, you can omit `server=78` from Discord scans and commands. Discord image scans default `year` to the current calendar year unless you include `year=YYYY`.
 
 ## Notes
 
 - The Discord bot uses the same database as the web app, so anything scanned in Discord appears on the dashboard.
+- Records older than 30 days are hidden from normal views by a startup retention pass. Their database rows and images are retained for review at `/admin/deleted`.
 - Ops screenshots usually do not visibly show the defender, so those entries are stored with a blank defender.
 - SQLite is fine for a starter deployment. For heavier multi-user usage, moving to PostgreSQL would be the next upgrade.

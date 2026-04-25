@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}[{{ alliance_tag }}] - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>{{ alliance_badge(alliance_tag, server_id) }}</h2>
+  <form class="search-form" method="get" action="/alliances/{{ alliance_tag|urlencode }}">
+    <input type="number" name="server_id" value="{{ server_id or '' }}" placeholder="Server ID filter">
+    <span></span>
+    <button type="submit">Apply</button>
+  </form>
+</section>
+
+<section class="grid two">
+  <div class="card">
+    <h3>Who they attack</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Alliance</th><th>Attacks</th><th>Attackers</th><th>Targets</th></tr></thead>
+        <tbody>
+        {% for row in outgoing %}
+          <tr>
+            <td>{{ alliance_badge(row.opponent_alliance_tag, server_id) }}</td>
+            <td>{{ row.attack_count }}</td>
+            <td>{{ row.opponent_members }}</td>
+            <td>{{ row.own_members }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Who attacks them</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Alliance</th><th>Attacks</th><th>Enemies</th><th>Members Hit</th></tr></thead>
+        <tbody>
+        {% for row in incoming %}
+          <tr>
+            <td>{{ alliance_badge(row.opponent_alliance_tag, server_id) }}</td>
+            <td>{{ row.attack_count }}</td>
+            <td>{{ row.own_members }}</td>
+            <td>{{ row.opponent_members }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Members seen in reports</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Server</th><th>Attacks Made</th><th>Attacks Received</th><th>Total</th></tr></thead>
+      <tbody>
+      {% for player in members %}
+        <tr>
+          <td><a href="/players/{{ player.id }}">{{ player.name }}</a></td>
+          <td>{{ player.server_id or '-' }}</td>
+          <td>{{ player.attacks_made }}</td>
+          <td>{{ player.attacks_received }}</td>
+          <td>{{ player.attacks_made + player.attacks_received }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Recent alliance activity</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Role</th><th>Attacker</th><th>Defender</th><th>Server</th><th>When</th></tr></thead>
+      <tbody>
+      {% for attack in history %}
+        {% set is_attacker = attack.attacker_alliance_tag == alliance_tag %}
+        <tr>
+          <td><a href="/attacks/{{ attack.id }}">{{ attack.id }}</a></td>
+          <td>{{ 'Attacker' if is_attacker else 'Defender' }}</td>
+          <td>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}</td>
+          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td>{{ attack.server_id or '-' }}</td>
+          <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

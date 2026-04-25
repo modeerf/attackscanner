@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Alliances - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Alliance activity</h2>
+  <form class="search-form" method="get" action="/alliances">
+    <input type="number" name="server_id" value="{{ server_id or '' }}" placeholder="Server ID filter">
+    <span></span>
+    <button type="submit">Apply</button>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Alliance ledger</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Alliance</th><th>Attacks Made</th><th>Attacks Received</th><th>Attacking Members</th><th>Members Hit</th><th>Total Activity</th></tr></thead>
+      <tbody>
+      {% for row in alliances %}
+        <tr>
+          <td>{{ alliance_badge(row.tag, server_id) }}</td>
+          <td>{{ row.attacks_made }}</td>
+          <td>{{ row.attacks_received }}</td>
+          <td>{{ row.attacking_members }}</td>
+          <td>{{ row.attacked_members }}</td>
+          <td>{{ row.attacks_made + row.attacks_received }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Alliance vs alliance</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Attacker</th><th>Defender</th><th>Attacks</th><th>Attackers</th><th>Targets</th></tr></thead>
+      <tbody>
+      {% for row in matchups %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ alliance_badge(row.attacker_alliance_tag, server_id) }}</td>
+          <td>{{ alliance_badge(row.defender_alliance_tag, server_id) }}</td>
+          <td>{{ row.attack_count }}</td>
+          <td>{{ row.unique_attackers }}</td>
+          <td>{{ row.unique_defenders }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

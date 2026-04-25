@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Players · Attack Scanner{% endblock %}
+{% block title %}Players - Last Assylum: Plague Violation Tracker{% endblock %}
 {% block content %}
 <section class="card">
   <h2>Search players</h2>
@@ -17,8 +17,8 @@
       {% for player in players %}
         <tr>
           <td><a href="/players/{{ player.id }}">{{ player.name }}</a></td>
-          <td>{{ player.current_alliance_tag or '—' }}</td>
-          <td>{{ player.server_id or '—' }}</td>
+          <td>{% if player.current_alliance_tag %}{{ alliance_badge(player.current_alliance_tag) }}{% else %}-{% endif %}</td>
+          <td>{{ player.server_id or '-' }}</td>
           <td>{{ player.total_events }}</td>
         </tr>
       {% endfor %}

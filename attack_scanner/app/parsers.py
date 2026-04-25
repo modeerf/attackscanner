@@ -19,6 +19,7 @@ PARTIAL_DATETIME_RE = re.compile(r"(\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})
 TIME_RE = re.compile(r"(\d{1,2}:\d{2}(?::\d{2})?)")
 COORD_SERVER_RE = re.compile(r"(?:^|\s)[S\$]?(\d{1,4})(?:\s|$)")
 OPS_NAME_RE = re.compile(r"(\[[A-Za-z0-9]+\]\s*[A-Za-z0-9_\-]+)")
+TAGGED_NAME_RE = re.compile(r"^\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[^\s\[\]]+)$")
 
 
 @dataclass(slots=True)
@@ -309,8 +310,8 @@ def parse_battle_report(image_bytes: bytes, default_year: int | None = None, fal
         raise ParseError("Could not find both attacker and defender in the battle image.")
 
     candidates.sort(key=lambda item: item["x_center"])
-    defender = candidates[0]
-    attacker = candidates[-1]
+    attacker = candidates[0]
+    defender = candidates[-1]
     occurred_at, occurred_at_text = extract_attack_datetime(image, default_year=default_year)
     server_id = attacker.get("server_id") or defender.get("server_id") or fallback_server_id
     if server_id is None:
@@ -349,6 +350,9 @@ def red_score(image_arr: np.ndarray, x: int, y: int, w: int, h: int) -> float:
 
 def _parse_name_fragment(fragment: str) -> tuple[str | None, str]:
     fragment = fragment.strip()
+    match = TAGGED_NAME_RE.match(fragment)
+    if match:
+        return match.group("tag"), match.group("name")
     match = MERGED_NAME_RE.match(fragment)
     if match:
         return match.group("tag"), match.group("name")
@@ -371,7 +375,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
     seen: set[tuple[str, str | None]] = set()
     for line in group_words_into_lines(words, tolerance=20):
         text = " ".join(item["text"] for item in line)
-        matches = OPS_NAME_RE.findall(text)
+        matches = find_tagged_names(text)
         if not matches:
             continue
         max_red = max(item["red_score"] for item in line)
@@ -404,3 +408,15 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
     if not events:
         raise ParseError("Could not find any red attacker names in the covert ops image.")
     return events
+
+
+def find_tagged_names(text: str) -> list[str]:
+    matches: list[str] = []
+    for match in re.finditer(r"\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[^\s\[\]]+)", text):
+        name = match.group("name").strip()
+        if not name:
+            continue
+        if re.fullmatch(r"\d{1,2}[-/]\d{1,2}", name) or TIME_RE.fullmatch(name):
+            continue
+        matches.append(f"[{match.group('tag')}]{name}")
+    return matches

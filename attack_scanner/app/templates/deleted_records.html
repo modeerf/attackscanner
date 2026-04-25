@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Deleted Records - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Deleted records</h2>
+  {% if not authorized %}
+  <form class="search-form" method="get" action="/admin/deleted">
+    <input type="password" name="password" placeholder="Password" required>
+    <span></span>
+    <button type="submit">Review</button>
+  </form>
+  {% else %}
+  <p class="muted">These records are hidden from normal dashboards and stats. Images remain stored, but their upload hashes were released when the record was deleted.</p>
+  {% endif %}
+</section>
+
+{% if authorized %}
+<section class="card">
+  <h3>Deleted attack log</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Deleted</th>
+          <th>Type</th>
+          <th>Attacker</th>
+          <th>Defender</th>
+          <th>Server</th>
+          <th>Original time</th>
+          <th>Image</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for attack in records %}
+        <tr>
+          <td><a href="/attacks/{{ attack.id }}">{{ attack.id }}</a></td>
+          <td>{{ attack.deleted_at }}</td>
+          <td>{{ attack.attack_type }}</td>
+          <td>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}</td>
+          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}-{% endif %}</td>
+          <td>{{ attack.server_id or '-' }}</td>
+          <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
+          <td>{% if attack.source_filename %}<a href="/attacks/{{ attack.id }}/image" target="_blank">View image</a>{% else %}-{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

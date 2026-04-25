@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Stats · Attack Scanner{% endblock %}
+{% block title %}Stats - Last Assylum: Plague Violation Tracker{% endblock %}
 {% block content %}
 <section class="card">
   <h2>Server stats</h2>
@@ -8,10 +8,20 @@
     <span></span>
     <button type="submit">Apply</button>
   </form>
-  {% if top_alliance %}
-  <p><strong>Alliance with the most distinct attackers:</strong> [{{ top_alliance.attacker_alliance_tag }}] — {{ top_alliance.unique_attackers }} attacker(s), {{ top_alliance.attack_count }} total attack(s).</p>
-  {% endif %}
+  <div class="summary-grid">
+    <div class="stat-box">
+      <span>Most aggressive alliance</span>
+      <strong>{% if top_alliance %}{{ alliance_badge(top_alliance.attacker_alliance_tag) }}{% else %}-{% endif %}</strong>
+      <small>{% if top_alliance %}{{ top_alliance.attack_count }} attacks from {{ top_alliance.unique_attackers }} member(s){% else %}No attack data yet{% endif %}</small>
+    </div>
+    <div class="stat-box">
+      <span>Most attacked alliance</span>
+      <strong>{% if most_attacked_alliance %}{{ alliance_badge(most_attacked_alliance.defender_alliance_tag) }}{% else %}-{% endif %}</strong>
+      <small>{% if most_attacked_alliance %}{{ most_attacked_alliance.attack_count }} attacks against {{ most_attacked_alliance.unique_defenders }} member(s){% else %}No defender alliance data yet{% endif %}</small>
+    </div>
+  </div>
 </section>
+
 <section class="grid two">
   <div class="card">
     <h3>Top 10 attackers</h3>
@@ -20,20 +30,74 @@
         <thead><tr><th>#</th><th>Name</th><th>Alliance</th><th>Total</th><th>Battle</th><th>Ops</th></tr></thead>
         <tbody>
         {% for row in attackers %}
-          <tr><td>{{ loop.index }}</td><td>{{ row.attacker_name }}</td><td>{{ row.attacker_alliance_tag or '—' }}</td><td>{{ row.attack_count }}</td><td>{{ row.battle_count }}</td><td>{{ row.covert_ops_count }}</td></tr>
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ row.attacker_name }}</td>
+            <td>{% if row.attacker_alliance_tag %}{{ alliance_badge(row.attacker_alliance_tag) }}{% else %}-{% endif %}</td>
+            <td>{{ row.attack_count }}</td>
+            <td>{{ row.battle_count }}</td>
+            <td>{{ row.covert_ops_count }}</td>
+          </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
   <div class="card">
-    <h3>Top alliances</h3>
+    <h3>Top attacking alliances</h3>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Alliance</th><th>Unique Attackers</th><th>Total Attacks</th></tr></thead>
         <tbody>
         {% for row in alliances %}
-          <tr><td>{{ loop.index }}</td><td>{{ row.attacker_alliance_tag }}</td><td>{{ row.unique_attackers }}</td><td>{{ row.attack_count }}</td></tr>
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ alliance_badge(row.attacker_alliance_tag) }}</td>
+            <td>{{ row.unique_attackers }}</td>
+            <td>{{ row.attack_count }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="grid two">
+  <div class="card">
+    <h3>Most attacked alliances</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Alliance</th><th>Attacks Received</th><th>Members Hit</th><th>Enemy Alliances</th></tr></thead>
+        <tbody>
+        {% for row in attacked_alliances %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ alliance_badge(row.defender_alliance_tag) }}</td>
+            <td>{{ row.attack_count }}</td>
+            <td>{{ row.unique_defenders }}</td>
+            <td>{{ row.attacking_alliances }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Top alliance matchups</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Attacker</th><th>Defender</th><th>Attacks</th><th>Attackers</th><th>Targets</th></tr></thead>
+        <tbody>
+        {% for row in matchups %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ alliance_badge(row.attacker_alliance_tag) }}</td>
+            <td>{{ alliance_badge(row.defender_alliance_tag) }}</td>
+            <td>{{ row.attack_count }}</td>
+            <td>{{ row.unique_attackers }}</td>
+            <td>{{ row.unique_defenders }}</td>
+          </tr>
         {% endfor %}
         </tbody>
       </table>

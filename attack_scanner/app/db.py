@@ -54,32 +54,91 @@ CREATE TABLE IF NOT EXISTS attacks (
     occurred_at TEXT,
     occurred_at_text TEXT,
     source_filename TEXT,
+    source_image_hash TEXT,
     source_kind TEXT NOT NULL DEFAULT 'upload',
     notes TEXT,
     parser_confidence REAL,
     raw_parse_json TEXT,
+    deleted_at TEXT,
+    delete_reason TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(attacker_player_id) REFERENCES players(id) ON DELETE CASCADE,
     FOREIGN KEY(defender_player_id) REFERENCES players(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS image_submissions (
+    image_hash TEXT PRIMARY KEY,
+    source_filename TEXT,
+    source_kind TEXT NOT NULL,
+    first_attack_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS managed_alliances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    server_id INTEGER NOT NULL,
+    alliance_tag TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(server_id, alliance_tag)
 );
 
 CREATE INDEX IF NOT EXISTS idx_players_server_name ON players(server_id, normalized_name);
 CREATE INDEX IF NOT EXISTS idx_attacks_server_time ON attacks(server_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_attacks_attacker ON attacks(attacker_player_id);
 CREATE INDEX IF NOT EXISTS idx_attacks_defender ON attacks(defender_player_id);
+CREATE INDEX IF NOT EXISTS idx_attacks_attacker_alliance ON attacks(attacker_alliance_tag);
+CREATE INDEX IF NOT EXISTS idx_attacks_defender_alliance ON attacks(defender_alliance_tag);
 """
 
 
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA_SQL)
+        ensure_column(conn, "attacks", "source_image_hash", "TEXT")
+        ensure_column(conn, "attacks", "deleted_at", "TEXT")
+        ensure_column(conn, "attacks", "delete_reason", "TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_attacks_source_image_hash ON attacks(source_image_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_attacks_deleted_at ON attacks(deleted_at)")
+        normalize_existing_alliance_tags(conn)
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def normalize_name(name: str) -> str:
     return " ".join(name.strip().lower().split())
 
 
+def normalize_alliance_tag(tag: str | None) -> str | None:
+    if tag is None:
+        return None
+    tag = tag.strip()
+    if tag.startswith("[") and tag.endswith("]"):
+        tag = tag[1:-1].strip()
+    return tag or None
+
+
+def normalize_existing_alliance_tags(conn: sqlite3.Connection) -> None:
+    for table, columns in {
+        "attacks": ("attacker_alliance_tag", "defender_alliance_tag"),
+        "players": ("current_alliance_tag",),
+    }.items():
+        rows = conn.execute(f"SELECT id, {', '.join(columns)} FROM {table}").fetchall()
+        for row in rows:
+            updates = {column: normalize_alliance_tag(row[column]) for column in columns}
+            if any(updates[column] != row[column] for column in columns):
+                assignments = ", ".join(f"{column} = ?" for column in columns)
+                conn.execute(
+                    f"UPDATE {table} SET {assignments} WHERE id = ?",
+                    (*[updates[column] for column in columns], row["id"]),
+                )
+
+
 def get_or_create_player(conn: sqlite3.Connection, name: str, server_id: int | None = None, alliance_tag: str | None = None) -> sqlite3.Row:
+    alliance_tag = normalize_alliance_tag(alliance_tag)
     normalized = normalize_name(name)
     row = conn.execute(
         "SELECT * FROM players WHERE server_id IS ? AND normalized_name = ?",
@@ -113,7 +172,10 @@ def add_attack(
     notes: str | None,
     parser_confidence: float | None,
     raw_parse_json: dict | list | None,
+    source_image_hash: str | None = None,
 ) -> int:
+    attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
+    defender_alliance_tag = normalize_alliance_tag(defender_alliance_tag)
     attacker = get_or_create_player(conn, attacker_name, server_id=server_id, alliance_tag=attacker_alliance_tag)
     defender_id = None
     defender_clean = defender_name.strip() if defender_name else None
@@ -126,9 +188,9 @@ def add_attack(
         INSERT INTO attacks (
             server_id, attack_type, attacker_player_id, attacker_name, attacker_alliance_tag,
             defender_player_id, defender_name, defender_alliance_tag,
-            occurred_at, occurred_at_text, source_filename, source_kind,
+            occurred_at, occurred_at_text, source_filename, source_image_hash, source_kind,
             notes, parser_confidence, raw_parse_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             server_id,
@@ -142,6 +204,7 @@ def add_attack(
             occurred_at,
             occurred_at_text,
             source_filename,
+            source_image_hash,
             source_kind,
             notes,
             parser_confidence,
@@ -151,15 +214,114 @@ def add_attack(
     return int(cursor.lastrowid)
 
 
-def delete_attack(conn: sqlite3.Connection, attack_id: int) -> None:
-    conn.execute("DELETE FROM attacks WHERE id = ?", (attack_id,))
+def get_image_submission(conn: sqlite3.Connection, image_hash: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM image_submissions WHERE image_hash = ?",
+        (image_hash,),
+    ).fetchone()
+
+
+def add_image_submission(
+    conn: sqlite3.Connection,
+    *,
+    image_hash: str,
+    source_filename: str | None,
+    source_kind: str,
+    first_attack_id: int | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO image_submissions (image_hash, source_filename, source_kind, first_attack_id)
+        VALUES (?, ?, ?, ?)
+        """,
+        (image_hash, source_filename, source_kind, first_attack_id),
+    )
+
+
+def managed_alliance_tags(conn: sqlite3.Connection, server_id: int = 78) -> list[str]:
+    return [
+        row["alliance_tag"]
+        for row in conn.execute(
+            "SELECT alliance_tag FROM managed_alliances WHERE server_id = ? ORDER BY alliance_tag ASC",
+            (server_id,),
+        ).fetchall()
+    ]
+
+
+def is_managed_alliance(conn: sqlite3.Connection, alliance_tag: str | None, server_id: int = 78) -> bool:
+    alliance_tag = normalize_alliance_tag(alliance_tag)
+    if not alliance_tag:
+        return False
+    return conn.execute(
+        "SELECT 1 FROM managed_alliances WHERE server_id = ? AND alliance_tag = ? LIMIT 1",
+        (server_id, alliance_tag),
+    ).fetchone() is not None
+
+
+def add_managed_alliance(conn: sqlite3.Connection, alliance_tag: str, server_id: int = 78) -> None:
+    alliance_tag = normalize_alliance_tag(alliance_tag)
+    if not alliance_tag:
+        return
+    conn.execute(
+        "INSERT OR IGNORE INTO managed_alliances (server_id, alliance_tag) VALUES (?, ?)",
+        (server_id, alliance_tag),
+    )
+
+
+def remove_managed_alliance(conn: sqlite3.Connection, alliance_tag: str, server_id: int = 78) -> None:
+    alliance_tag = normalize_alliance_tag(alliance_tag)
+    if not alliance_tag:
+        return
+    conn.execute(
+        "DELETE FROM managed_alliances WHERE server_id = ? AND alliance_tag = ?",
+        (server_id, alliance_tag),
+    )
+
+
+def delete_attack(conn: sqlite3.Connection, attack_id: int, delete_reason: str | None = None) -> None:
+    row = get_attack(conn, attack_id)
+    if not row:
+        return
+    conn.execute(
+        "UPDATE attacks SET deleted_at = CURRENT_TIMESTAMP, delete_reason = ? WHERE id = ?",
+        (delete_reason, attack_id),
+    )
+    if row["source_image_hash"]:
+        remaining = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM attacks
+            WHERE source_image_hash = ?
+              AND id != ?
+              AND deleted_at IS NULL
+            """,
+            (row["source_image_hash"], attack_id),
+        ).fetchone()["total"]
+        if remaining == 0:
+            conn.execute("DELETE FROM image_submissions WHERE image_hash = ?", (row["source_image_hash"],))
+
+
+def soft_delete_expired_attacks(conn: sqlite3.Connection, days: int = 30) -> int:
+    rows = conn.execute(
+        """
+        SELECT id
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND datetime(COALESCE(occurred_at, created_at)) < datetime('now', ?)
+        """,
+        (f"-{days} days",),
+    ).fetchall()
+    for row in rows:
+        delete_attack(conn, row["id"], delete_reason=f"Automatic {days}-day retention")
+    return len(rows)
 
 
 def recent_attacks(conn: sqlite3.Connection, limit: int = 20, server_id: int | None = None) -> list[sqlite3.Row]:
     return conn.execute(
         """
         SELECT * FROM attacks
-        WHERE (? IS NULL OR server_id = ?)
+        WHERE deleted_at IS NULL
+          AND (? IS NULL OR server_id = ?)
         ORDER BY COALESCE(occurred_at, created_at) DESC, id DESC
         LIMIT ?
         """,
@@ -172,7 +334,7 @@ def search_players(conn: sqlite3.Connection, query: str = "", server_id: int | N
     if query:
         return conn.execute(
             """
-            SELECT p.*, (SELECT COUNT(*) FROM attacks a WHERE a.attacker_player_id = p.id OR a.defender_player_id = p.id) AS total_events
+            SELECT p.*, (SELECT COUNT(*) FROM attacks a WHERE a.deleted_at IS NULL AND (a.attacker_player_id = p.id OR a.defender_player_id = p.id)) AS total_events
             FROM players p
             WHERE p.name LIKE ? AND (? IS NULL OR p.server_id = ?)
             ORDER BY total_events DESC, p.name ASC
@@ -182,7 +344,7 @@ def search_players(conn: sqlite3.Connection, query: str = "", server_id: int | N
         ).fetchall()
     return conn.execute(
         """
-        SELECT p.*, (SELECT COUNT(*) FROM attacks a WHERE a.attacker_player_id = p.id OR a.defender_player_id = p.id) AS total_events
+        SELECT p.*, (SELECT COUNT(*) FROM attacks a WHERE a.deleted_at IS NULL AND (a.attacker_player_id = p.id OR a.defender_player_id = p.id)) AS total_events
         FROM players p
         WHERE (? IS NULL OR p.server_id = ?)
         ORDER BY total_events DESC, p.name ASC
@@ -215,10 +377,15 @@ def get_player(conn: sqlite3.Connection, player_id: int) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
 
 
+def get_attack(conn: sqlite3.Connection, attack_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM attacks WHERE id = ?", (attack_id,)).fetchone()
+
+
 def player_history(conn: sqlite3.Connection, player_id: int, limit: int | None = None) -> list[sqlite3.Row]:
     sql = """
         SELECT * FROM attacks
-        WHERE attacker_player_id = ? OR defender_player_id = ?
+        WHERE deleted_at IS NULL
+          AND (attacker_player_id = ? OR defender_player_id = ?)
         ORDER BY COALESCE(occurred_at, created_at) DESC, id DESC
     """
     params: list[object] = [player_id, player_id]
@@ -236,7 +403,8 @@ def top_attackers(conn: sqlite3.Connection, server_id: int | None = None, limit:
                SUM(CASE WHEN attack_type = 'covert_ops' THEN 1 ELSE 0 END) AS covert_ops_count,
                SUM(CASE WHEN attack_type = 'battle' THEN 1 ELSE 0 END) AS battle_count
         FROM attacks
-        WHERE (? IS NULL OR server_id = ?)
+        WHERE deleted_at IS NULL
+          AND (? IS NULL OR server_id = ?)
         GROUP BY attacker_player_id, attacker_name, attacker_alliance_tag, server_id
         ORDER BY attack_count DESC, attacker_name ASC
         LIMIT ?
@@ -252,11 +420,181 @@ def top_alliances(conn: sqlite3.Connection, server_id: int | None = None, limit:
                COUNT(*) AS attack_count,
                COUNT(DISTINCT attacker_player_id) AS unique_attackers
         FROM attacks
-        WHERE attacker_alliance_tag IS NOT NULL AND attacker_alliance_tag != ''
+        WHERE deleted_at IS NULL
+          AND attacker_alliance_tag IS NOT NULL AND attacker_alliance_tag != ''
           AND (? IS NULL OR server_id = ?)
         GROUP BY attacker_alliance_tag
         ORDER BY unique_attackers DESC, attack_count DESC, attacker_alliance_tag ASC
         LIMIT ?
         """,
         (server_id, server_id, limit),
+    ).fetchall()
+
+
+def top_attacked_alliances(conn: sqlite3.Connection, server_id: int | None = None, limit: int = 10) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT defender_alliance_tag,
+               COUNT(*) AS attack_count,
+               COUNT(DISTINCT defender_player_id) AS unique_defenders,
+               COUNT(DISTINCT attacker_player_id) AS unique_attackers,
+               COUNT(DISTINCT attacker_alliance_tag) AS attacking_alliances
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND defender_alliance_tag IS NOT NULL AND defender_alliance_tag != ''
+          AND (? IS NULL OR server_id = ?)
+        GROUP BY defender_alliance_tag
+        ORDER BY attack_count DESC, unique_defenders DESC, defender_alliance_tag ASC
+        LIMIT ?
+        """,
+        (server_id, server_id, limit),
+    ).fetchall()
+
+
+def alliance_overview(conn: sqlite3.Connection, server_id: int | None = None, limit: int = 100) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        WITH alliance_tags AS (
+            SELECT attacker_alliance_tag AS tag
+            FROM attacks
+            WHERE deleted_at IS NULL
+              AND attacker_alliance_tag IS NOT NULL AND attacker_alliance_tag != ''
+            UNION
+            SELECT defender_alliance_tag AS tag
+            FROM attacks
+            WHERE deleted_at IS NULL
+              AND defender_alliance_tag IS NOT NULL AND defender_alliance_tag != ''
+        )
+        SELECT tag,
+               (SELECT COUNT(*) FROM attacks a WHERE a.deleted_at IS NULL AND a.attacker_alliance_tag = tag AND (? IS NULL OR a.server_id = ?)) AS attacks_made,
+               (SELECT COUNT(*) FROM attacks a WHERE a.deleted_at IS NULL AND a.defender_alliance_tag = tag AND (? IS NULL OR a.server_id = ?)) AS attacks_received,
+               (SELECT COUNT(DISTINCT attacker_player_id) FROM attacks a WHERE a.deleted_at IS NULL AND a.attacker_alliance_tag = tag AND (? IS NULL OR a.server_id = ?)) AS attacking_members,
+               (SELECT COUNT(DISTINCT defender_player_id) FROM attacks a WHERE a.deleted_at IS NULL AND a.defender_alliance_tag = tag AND (? IS NULL OR a.server_id = ?)) AS attacked_members
+        FROM alliance_tags
+        WHERE attacks_made > 0 OR attacks_received > 0
+        ORDER BY (attacks_made + attacks_received) DESC, attacks_received DESC, tag ASC
+        LIMIT ?
+        """,
+        (server_id, server_id, server_id, server_id, server_id, server_id, server_id, server_id, limit),
+    ).fetchall()
+
+
+def alliance_matchups(conn: sqlite3.Connection, server_id: int | None = None, limit: int = 20) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT attacker_alliance_tag,
+               defender_alliance_tag,
+               COUNT(*) AS attack_count,
+               COUNT(DISTINCT attacker_player_id) AS unique_attackers,
+               COUNT(DISTINCT defender_player_id) AS unique_defenders
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND attacker_alliance_tag IS NOT NULL AND attacker_alliance_tag != ''
+          AND defender_alliance_tag IS NOT NULL AND defender_alliance_tag != ''
+          AND attacker_alliance_tag != defender_alliance_tag
+          AND (? IS NULL OR server_id = ?)
+        GROUP BY attacker_alliance_tag, defender_alliance_tag
+        ORDER BY attack_count DESC, unique_attackers DESC, attacker_alliance_tag ASC, defender_alliance_tag ASC
+        LIMIT ?
+        """,
+        (server_id, server_id, limit),
+    ).fetchall()
+
+
+def alliance_members(conn: sqlite3.Connection, alliance_tag: str, server_id: int | None = None, limit: int = 100) -> list[sqlite3.Row]:
+    alliance_tag = normalize_alliance_tag(alliance_tag) or ""
+    return conn.execute(
+        """
+        WITH alliance_players AS (
+            SELECT id AS player_id
+            FROM players
+            WHERE current_alliance_tag = ? AND (? IS NULL OR server_id = ?)
+            UNION
+            SELECT attacker_player_id AS player_id
+            FROM attacks
+            WHERE deleted_at IS NULL AND attacker_alliance_tag = ? AND (? IS NULL OR server_id = ?)
+            UNION
+            SELECT defender_player_id AS player_id
+            FROM attacks
+            WHERE deleted_at IS NULL AND defender_alliance_tag = ? AND defender_player_id IS NOT NULL AND (? IS NULL OR server_id = ?)
+        )
+        SELECT p.id,
+               p.name,
+               p.server_id,
+               p.current_alliance_tag,
+               (SELECT COUNT(*) FROM attacks a WHERE a.deleted_at IS NULL AND a.attacker_player_id = p.id AND a.attacker_alliance_tag = ? AND (? IS NULL OR a.server_id = ?)) AS attacks_made,
+               (SELECT COUNT(*) FROM attacks a WHERE a.deleted_at IS NULL AND a.defender_player_id = p.id AND a.defender_alliance_tag = ? AND (? IS NULL OR a.server_id = ?)) AS attacks_received
+        FROM alliance_players ap
+        JOIN players p ON p.id = ap.player_id
+        ORDER BY (attacks_made + attacks_received) DESC, attacks_made DESC, attacks_received DESC, p.name ASC
+        LIMIT ?
+        """,
+        (
+            alliance_tag, server_id, server_id,
+            alliance_tag, server_id, server_id,
+            alliance_tag, server_id, server_id,
+            alliance_tag, server_id, server_id,
+            alliance_tag, server_id, server_id,
+            limit,
+        ),
+    ).fetchall()
+
+
+def alliance_opponents(conn: sqlite3.Connection, alliance_tag: str, direction: str, server_id: int | None = None, limit: int = 20) -> list[sqlite3.Row]:
+    alliance_tag = normalize_alliance_tag(alliance_tag) or ""
+    if direction == "incoming":
+        own_column = "defender_alliance_tag"
+        opponent_column = "attacker_alliance_tag"
+        own_player_column = "defender_player_id"
+        opponent_player_column = "attacker_player_id"
+    else:
+        own_column = "attacker_alliance_tag"
+        opponent_column = "defender_alliance_tag"
+        own_player_column = "attacker_player_id"
+        opponent_player_column = "defender_player_id"
+
+    return conn.execute(
+        f"""
+        SELECT {opponent_column} AS opponent_alliance_tag,
+               COUNT(*) AS attack_count,
+               COUNT(DISTINCT {own_player_column}) AS own_members,
+               COUNT(DISTINCT {opponent_player_column}) AS opponent_members
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND {own_column} = ?
+          AND {opponent_column} IS NOT NULL AND {opponent_column} != ''
+          AND {opponent_column} != ?
+          AND (? IS NULL OR server_id = ?)
+        GROUP BY {opponent_column}
+        ORDER BY attack_count DESC, own_members DESC, opponent_alliance_tag ASC
+        LIMIT ?
+        """,
+        (alliance_tag, alliance_tag, server_id, server_id, limit),
+    ).fetchall()
+
+
+def recent_attacks_for_alliance(conn: sqlite3.Connection, alliance_tag: str, server_id: int | None = None, limit: int = 50) -> list[sqlite3.Row]:
+    alliance_tag = normalize_alliance_tag(alliance_tag) or ""
+    return conn.execute(
+        """
+        SELECT * FROM attacks
+        WHERE deleted_at IS NULL
+          AND (attacker_alliance_tag = ? OR defender_alliance_tag = ?)
+          AND (? IS NULL OR server_id = ?)
+        ORDER BY COALESCE(occurred_at, created_at) DESC, id DESC
+        LIMIT ?
+        """,
+        (alliance_tag, alliance_tag, server_id, server_id, limit),
+    ).fetchall()
+
+
+def deleted_attacks(conn: sqlite3.Connection, limit: int = 200) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT * FROM attacks
+        WHERE deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC, id DESC
+        LIMIT ?
+        """,
+        (limit,),
     ).fetchall()

@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Attack Scanner{% endblock %}</title>
+  <title>{% block title %}Last Assylum: Plague Violation Tracker{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="site-header">
   <div class="wrap nav-row">
-    <h1><a href="/">Attack Scanner</a></h1>
+    <h1><a href="/">Last Assylum: Plague Violation Tracker</a></h1>
     <nav>
       <a href="/">Dashboard</a>
       <a href="/players">Players</a>
       <a href="/stats">Stats</a>
+      <a href="/alliances">Alliances</a>
       <a href="/attacks/new">Manual Add</a>
     </nav>
   </div>
@@ -21,5 +22,18 @@
 <main class="wrap">
   {% block content %}{% endblock %}
 </main>
+<script>
+  function confirmDeleteWithPassword(form) {
+    const password = window.prompt("Enter delete password");
+    if (password === null) {
+      return false;
+    }
+    const field = form.querySelector("input[name='delete_password']");
+    if (field) {
+      field.value = password;
+    }
+    return window.confirm("Delete this attack?");
+  }
+</script>
 </body>
 </html>
