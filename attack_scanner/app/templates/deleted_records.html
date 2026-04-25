@@ -38,7 +38,7 @@
           <td>{{ attack.deleted_at }}</td>
           <td>{{ attack.attack_type }}</td>
           <td>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}</td>
-          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}-{% endif %}</td>
+          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% endif %}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% elif not attack.defender_name %}-{% endif %}</td>
           <td>{{ attack.server_id or '-' }}</td>
           <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
           <td>{% if attack.source_filename %}<a href="/attacks/{{ attack.id }}/image" target="_blank">View image</a>{% else %}-{% endif %}</td>

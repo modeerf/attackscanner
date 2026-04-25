@@ -10,7 +10,7 @@ This project now has **two entry points** that share the same parser and SQLite 
 ### Web app
 
 - Upload battle screenshots and parse attacker, defender, server, and date/time.
-- Upload covert ops screenshots and parse the red attacker names.
+- Upload covert ops screenshots and parse the red attacker names, with an optional victim alliance.
 - Search players and view their history.
 - View top 10 attackers.
 - View the alliance with the most distinct attackers.
@@ -32,6 +32,7 @@ This project now has **two entry points** that share the same parser and SQLite 
 - Add `server=78` to override the default server for a Discord message.
 - Add `year=2026` to override the current calendar year if OCR cannot infer the year.
 - Include `ops` or `battle` in the post text to force the parser type, otherwise the bot auto-detects.
+- For ops screenshots, add `victim=AVL`, `victim_alliance=AVL`, or `defender_alliance=AVL` to record the victim alliance.
 
 ## Setup
 
@@ -77,6 +78,12 @@ Post a message like:
 ```
 
 and attach the screenshot.
+
+For a covert ops report where the victim alliance is AVL:
+
+```text
+@LastAssylumTracker ops server=78 victim=AVL
+```
 
 Or:
 

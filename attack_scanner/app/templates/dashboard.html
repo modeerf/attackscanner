@@ -23,6 +23,7 @@
       <label>Image<input type="file" name="image" accept="image/*" required></label>
       <label>Server ID<input type="number" name="server_id" placeholder="78"></label>
       <label>Default year<input type="number" name="default_year" value="{{ now_year }}"></label>
+      <label>Victim alliance <input type="text" name="victim_alliance_tag" placeholder="AVL"></label>
       <button type="submit">Process ops image</button>
     </form>
   </div>
@@ -40,7 +41,7 @@
           <td><a href="/attacks/{{ attack.id }}">{{ attack.id }}</a></td>
           <td>{{ attack.attack_type }}</td>
           <td>{{ attack.attacker_name }}{% if attack.attacker_alliance_tag %} {{ alliance_badge(attack.attacker_alliance_tag) }}{% endif %}</td>
-          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td>{% if attack.defender_name %}{{ attack.defender_name }}{% endif %}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% elif not attack.defender_name %}<span class="muted">-</span>{% endif %}</td>
           <td>{{ attack.server_id or '-' }}</td>
           <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
           <td>

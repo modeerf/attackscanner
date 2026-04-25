@@ -24,6 +24,7 @@
     <ul>
       <li>Battle reports track attacker, defender, alliances, server, and event time.</li>
       <li>Covert ops reports track the red attacker entries from the report image.</li>
+      <li>For covert ops uploads, optionally enter a victim alliance so ops events count against that alliance in stats.</li>
       <li>The same image cannot be submitted twice while it is active.</li>
       <li>Click a record ID to view the submitted image and parsed details.</li>
     </ul>
@@ -78,7 +79,8 @@
       <li>Include <code>battle</code> to process the image as a battle report.</li>
       <li>Include <code>ops</code> to process the image as a covert ops report.</li>
       <li>Example: <code>@LAHT battle server=78</code> with a battle screenshot attached.</li>
-      <li>Example: <code>@LAHT ops year=2026</code> with a covert ops screenshot attached.</li>
+      <li>Example: <code>@LAHT ops victim=AVL year=2026</code> with a covert ops screenshot attached.</li>
+      <li>For ops scans, the victim alliance can be written as <code>victim=AVL</code>, <code>victim_alliance=AVL</code>, or <code>defender_alliance=AVL</code>.</li>
       <li>If no parser type is included, the bot tries to auto-detect the screenshot type.</li>
       <li>Duplicate images are rejected the same way they are in the web dashboard.</li>
     </ul>
@@ -90,6 +92,7 @@
       <li>Use <code>@LAHT stats</code> to show top attackers, top attacking alliances, and most attacked alliances.</li>
       <li>Use <code>@LAHT recent limit=10</code> to show recent records.</li>
       <li>Use <code>@LAHT history PlayerName</code> to show a player's recent attack history.</li>
+      <li>Use <code>@LAHT scanhelp</code> to show Discord image scan options.</li>
       <li>Add <code>server=78</code> to filter commands to a specific server.</li>
       <li>Add <code>limit=20</code> to recent/history commands to control how many rows are shown.</li>
       <li>The dashboard alias also works: <code>@LAHT dashboard</code>.</li>

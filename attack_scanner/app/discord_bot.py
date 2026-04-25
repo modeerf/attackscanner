@@ -44,6 +44,7 @@ class ScanOptions:
     report_type: str = "auto"
     server_id: int | None = None
     year: int | None = None
+    victim_alliance_tag: str | None = None
 
 
 def parse_scan_options(content: str) -> ScanOptions:
@@ -56,10 +57,16 @@ def parse_scan_options(content: str) -> ScanOptions:
 
     server_match = re.search(r"(?:server|srv|s)\s*[:=]\s*(\d+)", lowered)
     year_match = re.search(r"(?:year|y)\s*[:=]\s*(\d{4})", lowered)
+    victim_match = re.search(
+        r"(?:victim_alliance|victim|defender_alliance)\s*[:=]\s*(\[[^\]\s]+\]|[^\s]+)",
+        content,
+        re.IGNORECASE,
+    )
     return ScanOptions(
         report_type=report_type,
         server_id=int(server_match.group(1)) if server_match else default_server_id(),
         year=int(year_match.group(1)) if year_match else datetime.now().year,
+        victim_alliance_tag=normalize_alliance_option(victim_match.group(1)) if victim_match else None,
     )
 
 
@@ -72,6 +79,13 @@ def default_server_id() -> int | None:
     except ValueError:
         LOGGER.warning("Ignoring invalid ATTACK_SCANNER_DEFAULT_SERVER=%r", raw)
         return None
+
+
+def normalize_alliance_option(raw: str | None) -> str | None:
+    value = (raw or "").strip().strip(",.;")
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1].strip()
+    return value or None
 
 
 def build_bot() -> commands.Bot:
@@ -114,7 +128,7 @@ def build_bot() -> commands.Bot:
                 await message.reply("I hit an unexpected error while processing that image.")
 
         if mentioned and not attachments and not context.valid:
-            await message.reply("I am online. Try `@Bot stats`, `@Bot recent limit=10`, `@Bot history PlayerName`, or mention me with an image plus `battle` or `ops`.")
+            await message.reply("I am online. Try `@Bot stats`, `@Bot recent limit=10`, `@Bot history PlayerName`, or mention me with an image plus `battle` or `ops victim=AVL`.")
             return
 
         await bot.process_commands(message)
@@ -122,6 +136,19 @@ def build_bot() -> commands.Bot:
     @bot.command(name="ping", help="Check whether the bot is online.")
     async def ping_command(ctx: commands.Context) -> None:
         await ctx.reply("pong")
+
+    @bot.command(name="scanhelp", help="Show image scan options, including ops victim alliance.")
+    async def scanhelp_command(ctx: commands.Context) -> None:
+        await ctx.reply(
+            "\n".join(
+                [
+                    "Mention me with one or more image attachments to scan them.",
+                    "Use `battle` for battle reports or `ops` for covert ops reports.",
+                    "Ops scans can include a victim alliance: `victim=AVL`, `victim_alliance=AVL`, or `defender_alliance=AVL`.",
+                    "Examples: `@Bot ops victim=AVL server=78 year=2026` or `@Bot battle server=78`.",
+                ]
+            )
+        )
 
     @bot.command(name="stats", help="Show top attackers and top alliance. Example: @Bot stats server=78")
     async def stats_command(ctx: commands.Context, *, args: str = "") -> None:
@@ -215,17 +242,31 @@ def strip_named_ints(text: str, keys: set[str]) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def apply_victim_alliance(events: list[ParsedAttackEvent], options: ScanOptions) -> list[ParsedAttackEvent]:
+    if options.victim_alliance_tag:
+        for event in events:
+            if event.attack_type == "covert_ops":
+                event.defender_alliance_tag = options.victim_alliance_tag
+    return events
+
+
 def classify_report(data: bytes, options: ScanOptions) -> list[ParsedAttackEvent]:
     if options.report_type == "battle":
         return [parse_battle_report(data, default_year=options.year, fallback_server_id=options.server_id)]
     if options.report_type == "covert_ops":
-        return parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id)
+        return apply_victim_alliance(
+            parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id),
+            options,
+        )
 
     # auto-detect
     try:
         return [parse_battle_report(data, default_year=options.year, fallback_server_id=options.server_id)]
     except ParseError:
-        return parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id)
+        return apply_victim_alliance(
+            parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id),
+            options,
+        )
 
 
 def image_hash(data: bytes) -> str:
@@ -292,7 +333,7 @@ async def handle_scan_message(message: discord.Message, attachments: list[discor
         chunks.append("Saved:\n" + "\n".join(f"- {line}" for line in saved_lines))
     if error_lines:
         chunks.append("Errors:\n" + "\n".join(f"- {line}" for line in error_lines))
-    chunks.append("Commands: `@Bot stats`, `@Bot recent limit=10`, `@Bot history Holash server=78`")
+    chunks.append("Commands: `@Bot stats`, `@Bot recent limit=10`, `@Bot history Holash server=78`. Ops scans can include `victim=AVL`.")
     await message.reply("\n\n".join(chunks))
 
 

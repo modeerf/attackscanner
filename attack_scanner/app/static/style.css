@@ -321,8 +321,17 @@ code {
 }
 
 .upload-card .stack-form {
+  display: flex;
   flex: 1;
-  grid-template-rows: auto auto auto minmax(32px, 1fr);
+  flex-direction: column;
+}
+
+.upload-card .stack-form label {
+  flex: 0 0 auto;
+}
+
+.upload-card .stack-form button {
+  flex: 0 0 auto;
 }
 
 .upload-card button {

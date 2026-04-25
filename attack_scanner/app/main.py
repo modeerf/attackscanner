@@ -162,6 +162,13 @@ def _int_or_none(raw: str | None) -> int | None:
         return None
 
 
+def _alliance_tag_or_none(raw: str | None) -> str | None:
+    value = (raw or "").strip().strip(",.;")
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1].strip()
+    return value or None
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, msg: str | None = None, error: str | None = None):
     with connect() as conn:
@@ -227,7 +234,12 @@ def upload_attack(image: UploadFile = File(...), server_id: str | None = Form(No
 
 
 @app.post("/upload/ops")
-def upload_ops(image: UploadFile = File(...), server_id: str | None = Form(None), default_year: str | None = Form(None)):
+def upload_ops(
+    image: UploadFile = File(...),
+    server_id: str | None = Form(None),
+    default_year: str | None = Form(None),
+    victim_alliance_tag: str | None = Form(None),
+):
     content = image.file.read()
     image_hash = _image_hash(content)
     with connect() as conn:
@@ -240,6 +252,11 @@ def upload_ops(image: UploadFile = File(...), server_id: str | None = Form(None)
         events = parse_ops_report(content, default_year=year, fallback_server_id=server)
     except ParseError as exc:
         return RedirectResponse(f"/?error={quote(str(exc))}", status_code=303)
+
+    victim_alliance = _alliance_tag_or_none(victim_alliance_tag)
+    if victim_alliance:
+        for event in events:
+            event.defender_alliance_tag = victim_alliance
 
     saved = _save_upload(image, content)
     with connect() as conn:

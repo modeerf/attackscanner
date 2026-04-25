@@ -33,7 +33,7 @@
   </div>
   <div class="card">
     <h3>Defender</h3>
-    <p>{% if attack.defender_name %}{{ attack.defender_name }}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% endif %}{% else %}<span class="muted">No defender parsed</span>{% endif %}</p>
+    <p>{% if attack.defender_name %}{{ attack.defender_name }}{% endif %}{% if attack.defender_alliance_tag %} {{ alliance_badge(attack.defender_alliance_tag) }}{% elif not attack.defender_name %}<span class="muted">No defender parsed</span>{% endif %}</p>
   </div>
 </section>
 
