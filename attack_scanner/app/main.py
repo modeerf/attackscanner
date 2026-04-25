@@ -179,6 +179,11 @@ def dashboard(request: Request, msg: str | None = None, error: str | None = None
     )
 
 
+@app.get("/manual", response_class=HTMLResponse)
+def user_manual(request: Request):
+    return templates.TemplateResponse(request, "manual.html", {"request": request})
+
+
 @app.post("/upload/attack")
 def upload_attack(image: UploadFile = File(...), server_id: str | None = Form(None), default_year: str | None = Form(None)):
     content = image.file.read()

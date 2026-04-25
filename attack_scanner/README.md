@@ -16,6 +16,7 @@ This project now has **two entry points** that share the same parser and SQLite 
 - View the alliance with the most distinct attackers.
 - View alliance stats, including top attacking alliances, most attacked alliances, alliance-vs-alliance matchups, and alliance member activity.
 - Click an attack ID to view its details and submitted image.
+- Read the in-app user manual at `/manual`.
 - Manually add attacks.
 - Delete attacks with the moderator password. Deleted records are soft-deleted and can be reviewed at `/admin/deleted`.
 - Manage the hidden server 78 alliance list at `/admin/server78-alliances`; listed alliances display green, all others display red.

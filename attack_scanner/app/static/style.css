@@ -266,6 +266,42 @@ section + .card {
   text-shadow: 0 3px 16px rgba(0, 0, 0, .82);
 }
 
+.manual-hero {
+  min-height: 170px;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.manual-card {
+  min-height: 250px;
+}
+
+.manual-card ol,
+.manual-card ul {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--text);
+}
+
+.manual-card li {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+code {
+  padding: 2px 5px;
+  border: 1px solid rgba(112, 103, 68, .48);
+  border-radius: 4px;
+  background: rgba(8, 9, 7, .54);
+  color: #f2d887;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: .93em;
+}
+
 .stack-form {
   display: grid;
   gap: 14px;
@@ -498,7 +534,8 @@ button:hover {
   .grid.two,
   .search-form,
   .summary-grid,
-  .detail-grid {
+  .detail-grid,
+  .manual-grid {
     grid-template-columns: 1fr;
   }
 
