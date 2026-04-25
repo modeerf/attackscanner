@@ -63,10 +63,47 @@
   <article class="card manual-card">
     <h2>Discord bot</h2>
     <ul>
-      <li>Mention the bot with an image and include <code>battle</code> or <code>ops</code> to force the parser type.</li>
-      <li>Use <code>@LAHT ping</code> to check whether the bot is online.</li>
-      <li>Use <code>@LAHT stats</code>, <code>@LAHT recent limit=10</code>, or <code>@LAHT history PlayerName</code>.</li>
-      <li>Add <code>server=78</code> or <code>year=2026</code> when you need to override defaults.</li>
+      <li>Invite the bot to your Discord server from the Discord Developer Portal using the application's OAuth2 bot invite URL.</li>
+      <li>Enable Message Content Intent for the bot in the Discord Developer Portal.</li>
+      <li>Start the bot with <code>DISCORD_BOT_TOKEN</code> set to the bot token, not the application ID or public key.</li>
+      <li>Set <code>ATTACK_SCANNER_DEFAULT_SERVER=78</code> if most scans should default to Server 78.</li>
+      <li>Use <code>@LAHT ping</code> to check whether the bot is online. It should reply with <code>pong</code>.</li>
+    </ul>
+  </article>
+
+  <article class="card manual-card">
+    <h2>Discord scans</h2>
+    <ul>
+      <li>Mention the bot and attach one or more screenshots.</li>
+      <li>Include <code>battle</code> to process the image as a battle report.</li>
+      <li>Include <code>ops</code> to process the image as a covert ops report.</li>
+      <li>Example: <code>@LAHT battle server=78</code> with a battle screenshot attached.</li>
+      <li>Example: <code>@LAHT ops year=2026</code> with a covert ops screenshot attached.</li>
+      <li>If no parser type is included, the bot tries to auto-detect the screenshot type.</li>
+      <li>Duplicate images are rejected the same way they are in the web dashboard.</li>
+    </ul>
+  </article>
+
+  <article class="card manual-card">
+    <h2>Discord queries</h2>
+    <ul>
+      <li>Use <code>@LAHT stats</code> to show top attackers, top attacking alliances, and most attacked alliances.</li>
+      <li>Use <code>@LAHT recent limit=10</code> to show recent records.</li>
+      <li>Use <code>@LAHT history PlayerName</code> to show a player's recent attack history.</li>
+      <li>Add <code>server=78</code> to filter commands to a specific server.</li>
+      <li>Add <code>limit=20</code> to recent/history commands to control how many rows are shown.</li>
+      <li>The dashboard alias also works: <code>@LAHT dashboard</code>.</li>
+    </ul>
+  </article>
+
+  <article class="card manual-card">
+    <h2>Discord troubleshooting</h2>
+    <ul>
+      <li>If <code>@LAHT ping</code> does not respond, make sure the bot process is running.</li>
+      <li>If mention commands do not work, confirm Message Content Intent is enabled.</li>
+      <li>If the bot cannot reply, check channel permissions for view channel, read message history, and send messages.</li>
+      <li>If web records and Discord records do not match, make sure both are using the same SQLite database path.</li>
+      <li>For public Discord interactions webhooks, Discord requires an HTTPS interactions URL.</li>
     </ul>
   </article>
 </section>
