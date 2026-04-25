@@ -53,6 +53,18 @@ body::before {
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .55), transparent 70%);
 }
 
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 24%, rgba(210, 166, 76, .14), transparent 19%),
+    radial-gradient(circle at 85% 18%, rgba(158, 198, 93, .11), transparent 22%),
+    linear-gradient(180deg, rgba(8, 9, 7, .08), rgba(8, 9, 7, .36));
+}
+
 a {
   color: var(--green);
   text-decoration: none;
@@ -100,7 +112,9 @@ a.alliance-tag:hover {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(14, 15, 11, .94);
+  background:
+    linear-gradient(180deg, rgba(32, 31, 22, .97), rgba(12, 13, 10, .94)),
+    repeating-linear-gradient(90deg, rgba(210, 166, 76, .07) 0 1px, transparent 1px 48px);
   border-bottom: 1px solid var(--line-strong);
   box-shadow: 0 8px 22px var(--shadow);
 }
@@ -231,7 +245,8 @@ section + .card {
   border: 1px solid rgba(112, 103, 68, .42);
   border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(8, 9, 7, .66), rgba(8, 9, 7, .10) 58%, rgba(8, 9, 7, .42)),
+    linear-gradient(90deg, rgba(8, 9, 7, .78), rgba(8, 9, 7, .18) 58%, rgba(8, 9, 7, .48)),
+    url("/static/images/plague-dashboard-bg.png") center 34% / cover no-repeat,
     linear-gradient(180deg, rgba(158, 198, 93, .02), rgba(169, 77, 52, .04));
   box-shadow: 0 16px 34px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06);
 }
@@ -248,6 +263,7 @@ section + .card {
 .dashboard-scene h2 {
   margin: 0;
   font-size: 2rem;
+  text-shadow: 0 3px 16px rgba(0, 0, 0, .82);
 }
 
 .stack-form {
