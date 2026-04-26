@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import re
+import unicodedata
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
@@ -20,6 +21,36 @@ TIME_RE = re.compile(r"(\d{1,2}:\d{2}(?::\d{2})?)")
 COORD_SERVER_RE = re.compile(r"(?:^|\s)[S\$]?(\d{1,4})(?:\s|$)")
 OPS_NAME_RE = re.compile(r"(\[[A-Za-z0-9]+\]\s*[A-Za-z0-9_\-]+)")
 TAGGED_NAME_RE = re.compile(r"^\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[^\s\[\]]+)$")
+OPS_THEFT_WORDS = (
+    "stole",
+    "rob",
+    "robo",
+    "robo",
+    "recompensa",
+    "recompensas",
+    "quest reward",
+    "quest rewards",
+)
+OPS_HELP_WORDS = (
+    "helped",
+    "claim",
+    "ayudo",
+    "ayudo",
+    "reclamar",
+)
+OPS_CONTEXT_WORDS = (
+    "covert",
+    "operation",
+    "stole",
+    "quest",
+    "reward",
+    "rob",
+    "robo",
+    "recompensa",
+    "recompensas",
+    "mision",
+    "misión",
+)
 
 
 @dataclass(slots=True)
@@ -363,6 +394,25 @@ def _ops_datetime_from_text(text: str, default_year: int | None = None) -> tuple
     return None, None
 
 
+def _fold_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return ascii_text.lower()
+
+
+def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
+    folded = _fold_text(text)
+    return any(needle in folded for needle in needles)
+
+
+def _is_ops_theft_text(text: str) -> bool:
+    return _contains_any(text, OPS_THEFT_WORDS) and not _contains_any(text, OPS_HELP_WORDS)
+
+
+def _is_ops_context_text(text: str) -> bool:
+    return _contains_any(text, OPS_CONTEXT_WORDS)
+
+
 def _event_from_ops_match(
     raw_name: str,
     *,
@@ -476,27 +526,32 @@ def _fallback_ops_events_from_report_text(
     events: list[ParsedAttackEvent] = []
     seen: set[tuple[str, str | None]] = set()
     for text in texts:
-        if not re.search(r"\b(covert|operation|stole|quest|reward)", text, re.IGNORECASE):
+        if not _is_ops_context_text(text):
             continue
-        occurred_at, occurred_at_text = _ops_datetime_from_text(text, default_year=default_year)
-        for raw_name in find_tagged_names(text):
-            alliance_tag, name = _parse_name_fragment(raw_name)
-            key = (name.lower(), occurred_at_text)
-            if key in seen:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for idx, line in enumerate(lines):
+            window = " ".join(lines[max(0, idx - 1): min(len(lines), idx + 3)])
+            if not _is_ops_theft_text(window):
                 continue
-            seen.add(key)
-            events.append(
-                ParsedAttackEvent(
-                    attack_type="covert_ops",
-                    attacker_name=name,
-                    attacker_alliance_tag=alliance_tag,
-                    server_id=fallback_server_id,
-                    occurred_at=occurred_at,
-                    occurred_at_text=occurred_at_text,
-                    notes="Parsed from covert ops report text fallback",
-                    parser_confidence=0.68 + (0.06 if occurred_at_text else 0.0),
+            occurred_at, occurred_at_text = _ops_datetime_from_text(window, default_year=default_year)
+            for raw_name in find_tagged_names(window):
+                alliance_tag, name = _parse_name_fragment(raw_name)
+                key = (name.lower(), occurred_at_text)
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append(
+                    ParsedAttackEvent(
+                        attack_type="covert_ops",
+                        attacker_name=name,
+                        attacker_alliance_tag=alliance_tag,
+                        server_id=fallback_server_id,
+                        occurred_at=occurred_at,
+                        occurred_at_text=occurred_at_text,
+                        notes="Parsed from covert ops report text fallback",
+                        parser_confidence=0.74 + (0.06 if occurred_at_text else 0.0),
+                    )
                 )
-            )
     return events
 
 
@@ -532,7 +587,8 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
             continue
         max_red = max(item["red_score"] for item in line)
         avg_red = sum(item["red_score"] for item in line) / len(line)
-        if max_red < 0.035 and avg_red < 0.012:
+        is_theft_row = _is_ops_theft_text(text)
+        if not is_theft_row and max_red < 0.035 and avg_red < 0.012:
             continue
         occurred_at, occurred_at_text = _ops_datetime_from_text(text, default_year=default_year)
         for raw_name in matches:
@@ -541,7 +597,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
             if key in seen:
                 continue
             seen.add(key)
-            confidence = 0.75 + (0.12 if max_red > 0.25 else 0.0) + (0.08 if occurred_at_text else 0.0)
+            confidence = 0.75 + (0.12 if max_red > 0.25 else 0.0) + (0.08 if occurred_at_text else 0.0) + (0.06 if is_theft_row else 0.0)
             events.append(
                 _event_from_ops_match(
                     raw_name,
