@@ -450,6 +450,56 @@ def _fallback_ops_events_from_red_regions(
     return events
 
 
+def _fallback_ops_events_from_report_text(
+    image: Image.Image,
+    *,
+    default_year: int | None,
+    fallback_server_id: int | None,
+) -> list[ParsedAttackEvent]:
+    crop_boxes = [
+        (0, int(image.height * 0.38), image.width, int(image.height * 0.72)),
+        (0, int(image.height * 0.42), image.width, int(image.height * 0.82)),
+        (0, int(image.height * 0.30), image.width, image.height),
+    ]
+    texts: list[str] = []
+    for box in crop_boxes:
+        crop = image.crop(box)
+        prepared = enhance_for_ocr(crop, scale=2.6, contrast=2.6)
+        texts.extend(
+            [
+                pytesseract.image_to_string(crop, config="--psm 6"),
+                pytesseract.image_to_string(prepared, config="--psm 6"),
+                pytesseract.image_to_string(prepared, config="--psm 11"),
+            ]
+        )
+
+    events: list[ParsedAttackEvent] = []
+    seen: set[tuple[str, str | None]] = set()
+    for text in texts:
+        if not re.search(r"\b(covert|operation|stole|quest|reward)", text, re.IGNORECASE):
+            continue
+        occurred_at, occurred_at_text = _ops_datetime_from_text(text, default_year=default_year)
+        for raw_name in find_tagged_names(text):
+            alliance_tag, name = _parse_name_fragment(raw_name)
+            key = (name.lower(), occurred_at_text)
+            if key in seen:
+                continue
+            seen.add(key)
+            events.append(
+                ParsedAttackEvent(
+                    attack_type="covert_ops",
+                    attacker_name=name,
+                    attacker_alliance_tag=alliance_tag,
+                    server_id=fallback_server_id,
+                    occurred_at=occurred_at,
+                    occurred_at_text=occurred_at_text,
+                    notes="Parsed from covert ops report text fallback",
+                    parser_confidence=0.68 + (0.06 if occurred_at_text else 0.0),
+                )
+            )
+    return events
+
+
 def _parse_name_fragment(fragment: str) -> tuple[str | None, str]:
     fragment = fragment.strip()
     match = TAGGED_NAME_RE.match(fragment)
@@ -509,6 +559,12 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
             fallback_server_id=fallback_server_id,
         )
     if not events:
+        events = _fallback_ops_events_from_report_text(
+            image,
+            default_year=default_year,
+            fallback_server_id=fallback_server_id,
+        )
+    if not events:
         raise ParseError("Could not find any red attacker names in the covert ops image.")
     return events
 
@@ -516,7 +572,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
 def find_tagged_names(text: str) -> list[str]:
     matches: list[str] = []
     for match in re.finditer(r"\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[^\s\[\]]+)", text):
-        name = match.group("name").strip()
+        name = match.group("name").strip().strip(".,;:!?)")
         if not name:
             continue
         if re.fullmatch(r"\d{1,2}[-/]\d{1,2}", name) or TIME_RE.fullmatch(name):
