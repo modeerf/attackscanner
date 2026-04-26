@@ -348,6 +348,108 @@ def red_score(image_arr: np.ndarray, x: int, y: int, w: int, h: int) -> float:
     return float(mask.mean())
 
 
+def red_text_mask(image_arr: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(image_arr, cv2.COLOR_RGB2HSV)
+    h = hsv[:, :, 0].astype(np.int32)
+    s = hsv[:, :, 1]
+    v = hsv[:, :, 2]
+    return ((((h <= 12) | (h >= 168)) & (s > 45) & (v > 95))).astype(np.uint8) * 255
+
+
+def _ops_datetime_from_text(text: str, default_year: int | None = None) -> tuple[str | None, str | None]:
+    match = FULL_DATETIME_RE.search(text) or PARTIAL_DATETIME_RE.search(text)
+    if match:
+        return _normalize_datetime_value(match.group(1), default_year=default_year)
+    return None, None
+
+
+def _event_from_ops_match(
+    raw_name: str,
+    *,
+    occurred_at: str | None,
+    occurred_at_text: str | None,
+    fallback_server_id: int | None,
+    confidence: float,
+) -> ParsedAttackEvent:
+    alliance_tag, name = _parse_name_fragment(raw_name)
+    return ParsedAttackEvent(
+        attack_type="covert_ops",
+        attacker_name=name,
+        attacker_alliance_tag=alliance_tag,
+        server_id=fallback_server_id,
+        occurred_at=occurred_at,
+        occurred_at_text=occurred_at_text,
+        notes="Parsed from covert ops report",
+        parser_confidence=min(1.0, round(confidence, 3)),
+    )
+
+
+def _fallback_ops_events_from_red_regions(
+    image: Image.Image,
+    image_arr: np.ndarray,
+    *,
+    default_year: int | None,
+    fallback_server_id: int | None,
+) -> list[ParsedAttackEvent]:
+    mask = red_text_mask(image_arr)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (26, 7))
+    merged = cv2.dilate(mask, kernel, iterations=2)
+    contours, _ = cv2.findContours(merged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    events: list[ParsedAttackEvent] = []
+    seen: set[tuple[str, str | None]] = set()
+    for contour in sorted(contours, key=lambda c: cv2.boundingRect(c)[1]):
+        x, y, w, h = cv2.boundingRect(contour)
+        if w < image.width * 0.08 or h < 14:
+            continue
+        if y < image.height * 0.15:
+            continue
+
+        crop_box = (
+            max(0, x - 20),
+            max(0, y - 18),
+            min(image.width, x + w + 40),
+            min(image.height, y + h + 24),
+        )
+        crop = image.crop(crop_box)
+        prepared = enhance_for_ocr(crop, scale=2.5, contrast=2.8)
+        text_candidates = [
+            pytesseract.image_to_string(crop, config="--psm 7"),
+            pytesseract.image_to_string(prepared, config="--psm 7"),
+        ]
+        row_crop = image.crop(
+            (
+                0,
+                max(0, y - 70),
+                image.width,
+                min(image.height, y + max(h, 38) + 100),
+            )
+        )
+        row_text = pytesseract.image_to_string(row_crop, config="--psm 6")
+        occurred_at, occurred_at_text = _ops_datetime_from_text(row_text, default_year=default_year)
+
+        for text in text_candidates:
+            for raw_name in find_tagged_names(text):
+                alliance_tag, name = _parse_name_fragment(raw_name)
+                key = (name.lower(), occurred_at_text)
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append(
+                    ParsedAttackEvent(
+                        attack_type="covert_ops",
+                        attacker_name=name,
+                        attacker_alliance_tag=alliance_tag,
+                        server_id=fallback_server_id,
+                        occurred_at=occurred_at,
+                        occurred_at_text=occurred_at_text,
+                        notes="Parsed from covert ops report red-text fallback",
+                        parser_confidence=0.72,
+                    )
+                )
+    return events
+
+
 def _parse_name_fragment(fragment: str) -> tuple[str | None, str]:
     fragment = fragment.strip()
     match = TAGGED_NAME_RE.match(fragment)
@@ -380,12 +482,9 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
             continue
         max_red = max(item["red_score"] for item in line)
         avg_red = sum(item["red_score"] for item in line) / len(line)
-        if max_red < 0.12 and avg_red < 0.05:
+        if max_red < 0.035 and avg_red < 0.012:
             continue
-        dt_match = FULL_DATETIME_RE.search(text) or PARTIAL_DATETIME_RE.search(text)
-        occurred_at, occurred_at_text = (None, None)
-        if dt_match:
-            occurred_at, occurred_at_text = _normalize_datetime_value(dt_match.group(1), default_year=default_year)
+        occurred_at, occurred_at_text = _ops_datetime_from_text(text, default_year=default_year)
         for raw_name in matches:
             alliance_tag, name = _parse_name_fragment(raw_name)
             key = (name.lower(), occurred_at_text)
@@ -394,17 +493,21 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
             seen.add(key)
             confidence = 0.75 + (0.12 if max_red > 0.25 else 0.0) + (0.08 if occurred_at_text else 0.0)
             events.append(
-                ParsedAttackEvent(
-                    attack_type="covert_ops",
-                    attacker_name=name,
-                    attacker_alliance_tag=alliance_tag,
-                    server_id=fallback_server_id,
+                _event_from_ops_match(
+                    raw_name,
                     occurred_at=occurred_at,
                     occurred_at_text=occurred_at_text,
-                    notes="Parsed from covert ops report",
-                    parser_confidence=min(1.0, round(confidence, 3)),
+                    fallback_server_id=fallback_server_id,
+                    confidence=confidence,
                 )
             )
+    if not events:
+        events = _fallback_ops_events_from_red_regions(
+            image,
+            arr,
+            default_year=default_year,
+            fallback_server_id=fallback_server_id,
+        )
     if not events:
         raise ParseError("Could not find any red attacker names in the covert ops image.")
     return events
