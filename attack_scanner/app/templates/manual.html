@@ -12,7 +12,7 @@
   <article class="card manual-card">
     <h2>Daily workflow</h2>
     <ol>
-      <li>Use the dashboard to upload a battle report or covert ops screenshot.</li>
+      <li>Use the dashboard to upload a battle report, covert ops screenshot, or caravan attack screenshot.</li>
       <li>Leave server ID blank to use the parser result, or enter the server manually.</li>
       <li>The default year is the current calendar year and helps when screenshots only show month and day.</li>
       <li>Review parsed records in Recent attacks, Players, Stats, and Alliances.</li>
@@ -25,6 +25,9 @@
       <li>Battle reports track attacker, defender, alliances, server, and event time.</li>
       <li>Covert ops reports track the red attacker entries from the report image.</li>
       <li>For covert ops uploads, optionally enter a victim alliance so ops events count against that alliance in stats.</li>
+      <li>Caravan attack reports track the top caravan owner as the victim and the dated battle-history entries as attackers.</li>
+      <li>Caravan names can be in English, Spanish, Cyrillic, or other OCR-readable scripts.</li>
+      <li>Non-English parsing works best when the matching Tesseract language pack is installed on the server.</li>
       <li>The same image cannot be submitted twice while it is active.</li>
       <li>Click a record ID to view the submitted image and parsed details.</li>
     </ul>
@@ -78,8 +81,10 @@
       <li>Mention the bot and attach one or more screenshots.</li>
       <li>Include <code>battle</code> to process the image as a battle report.</li>
       <li>Include <code>ops</code> to process the image as a covert ops report.</li>
+      <li>Include <code>caravan</code> to process the image as a caravan attack report.</li>
       <li>Example: <code>@LAHT battle server=78</code> with a battle screenshot attached.</li>
       <li>Example: <code>@LAHT ops victim=AVL year=2026</code> with a covert ops screenshot attached.</li>
+      <li>Example: <code>@LAHT caravan server=78</code> with a caravan attack screenshot attached.</li>
       <li>For ops scans, the victim alliance can be written as <code>victim=AVL</code>, <code>victim_alliance=AVL</code>, or <code>defender_alliance=AVL</code>.</li>
       <li>If no parser type is included, the bot tries to auto-detect the screenshot type.</li>
       <li>Duplicate images are rejected the same way they are in the web dashboard.</li>

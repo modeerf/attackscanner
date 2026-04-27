@@ -42,7 +42,7 @@ from .db import (
     top_attackers,
     top_attacked_alliances,
 )
-from .parsers import ParseError, parse_battle_report, parse_ops_report, _normalize_datetime_value
+from .parsers import ParseError, parse_battle_report, parse_caravan_report, parse_ops_report, _normalize_datetime_value
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -288,6 +288,53 @@ def upload_ops(
         if created:
             conn.execute("UPDATE image_submissions SET first_attack_id = ? WHERE image_hash = ?", (created[0], image_hash))
     return RedirectResponse(f"/?msg=Saved {len(created)} covert ops event(s)", status_code=303)
+
+
+@app.post("/upload/caravan")
+def upload_caravan(image: UploadFile = File(...), server_id: str | None = Form(None), default_year: str | None = Form(None)):
+    content = image.file.read()
+    image_hash = _image_hash(content)
+    with connect() as conn:
+        if get_image_submission(conn, image_hash):
+            return _duplicate_redirect()
+
+    server = _int_or_none(server_id)
+    year = _int_or_none(default_year)
+    try:
+        events = parse_caravan_report(content, default_year=year, fallback_server_id=server)
+    except ParseError as exc:
+        return RedirectResponse(f"/?error={quote(str(exc))}", status_code=303)
+
+    saved = _save_upload(image, content)
+    with connect() as conn:
+        try:
+            add_image_submission(conn, image_hash=image_hash, source_filename=saved.name, source_kind="upload", first_attack_id=None)
+        except sqlite3.IntegrityError:
+            return _duplicate_redirect()
+        created = []
+        for event in events:
+            created.append(
+                add_attack(
+                    conn,
+                    attack_type=event.attack_type,
+                    attacker_name=event.attacker_name,
+                    attacker_alliance_tag=event.attacker_alliance_tag,
+                    defender_name=event.defender_name,
+                    defender_alliance_tag=event.defender_alliance_tag,
+                    server_id=event.server_id,
+                    occurred_at=event.occurred_at,
+                    occurred_at_text=event.occurred_at_text,
+                    source_filename=saved.name,
+                    source_kind="upload",
+                    notes=event.notes,
+                    parser_confidence=event.parser_confidence,
+                    raw_parse_json=event.to_dict(),
+                    source_image_hash=image_hash,
+                )
+            )
+        if created:
+            conn.execute("UPDATE image_submissions SET first_attack_id = ? WHERE image_hash = ?", (created[0], image_hash))
+    return RedirectResponse(f"/?msg=Saved {len(created)} caravan attack event(s)", status_code=303)
 
 
 @app.get("/players", response_class=HTMLResponse)

@@ -28,7 +28,7 @@ from .db import (
     top_attackers,
     top_attacked_alliances,
 )
-from .parsers import ParseError, ParsedAttackEvent, parse_battle_report, parse_ops_report
+from .parsers import ParseError, ParsedAttackEvent, parse_battle_report, parse_caravan_report, parse_ops_report
 
 LOGGER = logging.getLogger("attack_scanner.discord")
 logging.basicConfig(level=os.getenv("ATTACK_SCANNER_LOG_LEVEL", "INFO"))
@@ -50,7 +50,9 @@ class ScanOptions:
 def parse_scan_options(content: str) -> ScanOptions:
     lowered = content.lower()
     report_type = "auto"
-    if re.search(r"\b(ops|covert)\b", lowered):
+    if re.search(r"\b(caravan|trade|merchant)\b", lowered):
+        report_type = "caravan"
+    elif re.search(r"\b(ops|covert)\b", lowered):
         report_type = "covert_ops"
     elif re.search(r"\b(attack|battle)\b", lowered):
         report_type = "battle"
@@ -128,7 +130,7 @@ def build_bot() -> commands.Bot:
                 await message.reply("I hit an unexpected error while processing that image.")
 
         if mentioned and not attachments and not context.valid:
-            await message.reply("I am online. Try `@Bot stats`, `@Bot recent limit=10`, `@Bot history PlayerName`, or mention me with an image plus `battle` or `ops victim=AVL`.")
+            await message.reply("I am online. Try `@Bot stats`, `@Bot recent limit=10`, `@Bot history PlayerName`, or mention me with an image plus `battle`, `ops victim=AVL`, or `caravan`.")
             return
 
         await bot.process_commands(message)
@@ -143,9 +145,9 @@ def build_bot() -> commands.Bot:
             "\n".join(
                 [
                     "Mention me with one or more image attachments to scan them.",
-                    "Use `battle` for battle reports or `ops` for covert ops reports.",
+                    "Use `battle` for battle reports, `ops` for covert ops reports, or `caravan` for caravan attacks.",
                     "Ops scans can include a victim alliance: `victim=AVL`, `victim_alliance=AVL`, or `defender_alliance=AVL`.",
-                    "Examples: `@Bot ops victim=AVL server=78 year=2026` or `@Bot battle server=78`.",
+                    "Examples: `@Bot ops victim=AVL server=78 year=2026`, `@Bot caravan server=78`, or `@Bot battle server=78`.",
                 ]
             )
         )
@@ -253,6 +255,8 @@ def apply_victim_alliance(events: list[ParsedAttackEvent], options: ScanOptions)
 def classify_report(data: bytes, options: ScanOptions) -> list[ParsedAttackEvent]:
     if options.report_type == "battle":
         return [parse_battle_report(data, default_year=options.year, fallback_server_id=options.server_id)]
+    if options.report_type == "caravan":
+        return parse_caravan_report(data, default_year=options.year, fallback_server_id=options.server_id)
     if options.report_type == "covert_ops":
         return apply_victim_alliance(
             parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id),
@@ -263,10 +267,13 @@ def classify_report(data: bytes, options: ScanOptions) -> list[ParsedAttackEvent
     try:
         return [parse_battle_report(data, default_year=options.year, fallback_server_id=options.server_id)]
     except ParseError:
-        return apply_victim_alliance(
-            parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id),
-            options,
-        )
+        try:
+            return apply_victim_alliance(
+                parse_ops_report(data, default_year=options.year, fallback_server_id=options.server_id),
+                options,
+            )
+        except ParseError:
+            return parse_caravan_report(data, default_year=options.year, fallback_server_id=options.server_id)
 
 
 def image_hash(data: bytes) -> str:
@@ -333,7 +340,7 @@ async def handle_scan_message(message: discord.Message, attachments: list[discor
         chunks.append("Saved:\n" + "\n".join(f"- {line}" for line in saved_lines))
     if error_lines:
         chunks.append("Errors:\n" + "\n".join(f"- {line}" for line in error_lines))
-    chunks.append("Commands: `@Bot stats`, `@Bot recent limit=10`, `@Bot history Holash server=78`. Ops scans can include `victim=AVL`.")
+    chunks.append("Commands: `@Bot stats`, `@Bot recent limit=10`, `@Bot history Holash server=78`. Image scans can include `battle`, `ops victim=AVL`, or `caravan`.")
     await message.reply("\n\n".join(chunks))
 
 

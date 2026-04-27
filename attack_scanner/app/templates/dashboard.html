@@ -27,6 +27,15 @@
       <button type="submit">Process ops image</button>
     </form>
   </div>
+  <div class="card upload-card">
+    <h2>Upload caravan attack</h2>
+    <form method="post" action="/upload/caravan" enctype="multipart/form-data" class="stack-form">
+      <label>Image<input type="file" name="image" accept="image/*" required></label>
+      <label>Server ID<input type="number" name="server_id" placeholder="78"></label>
+      <label>Default year<input type="number" name="default_year" value="{{ now_year }}"></label>
+      <button type="submit">Process caravan image</button>
+    </form>
+  </div>
 </section>
 {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
 {% if error %}<div class="flash err">{{ error }}</div>{% endif %}

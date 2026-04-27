@@ -11,6 +11,7 @@ This project now has **two entry points** that share the same parser and SQLite 
 
 - Upload battle screenshots and parse attacker, defender, server, and date/time.
 - Upload covert ops screenshots and parse the red attacker names, with an optional victim alliance.
+- Upload caravan attack screenshots and parse the top caravan owner as the victim and battle-history entries as attackers.
 - Search players and view their history.
 - View top 10 attackers.
 - View the alliance with the most distinct attackers.
@@ -31,7 +32,7 @@ This project now has **two entry points** that share the same parser and SQLite 
   - `@Bot history Holash server=78 limit=10`
 - Add `server=78` to override the default server for a Discord message.
 - Add `year=2026` to override the current calendar year if OCR cannot infer the year.
-- Include `ops` or `battle` in the post text to force the parser type, otherwise the bot auto-detects.
+- Include `ops`, `battle`, or `caravan` in the post text to force the parser type, otherwise the bot auto-detects.
 - For ops screenshots, add `victim=AVL`, `victim_alliance=AVL`, or `defender_alliance=AVL` to record the victim alliance.
 
 ## Setup
@@ -43,7 +44,7 @@ This project now has **two entry points** that share the same parser and SQLite 
 pip install -r requirements.txt
 ```
 
-3. Install **Tesseract OCR** on the host machine and make sure `tesseract` is on your `PATH`.
+3. Install **Tesseract OCR** on the host machine and make sure `tesseract` is on your `PATH`. For non-English screenshots, install the matching Tesseract language packs. The parser will use installed `eng`, `rus`, and `spa` language data when available.
 4. In the Discord Developer Portal, enable the **Message Content Intent** for your bot, because mention-prefix commands and mention + image posts rely on message content.
 
 ## Run the web app
@@ -92,6 +93,14 @@ Or:
 ```
 
 with an attack screenshot attached.
+
+For a caravan attack report:
+
+```text
+@LastAssylumTracker caravan server=78
+```
+
+with a caravan screenshot attached. The top player is stored as the victim, and the battle-history entries are stored as attackers.
 
 ### Query data
 

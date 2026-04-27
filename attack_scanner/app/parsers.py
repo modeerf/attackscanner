@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, asdict
@@ -11,16 +12,16 @@ import numpy as np
 import pytesseract
 from PIL import Image, ImageEnhance, ImageOps
 
-ALLIANCE_TAG_RE = re.compile(r"^\[(?P<tag>[A-Za-z0-9]+)\]$")
-MERGED_NAME_RE = re.compile(r"^\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[A-Za-z0-9_\-]+)$")
+ALLIANCE_TAG_RE = re.compile(r"^\[(?P<tag>[^\]\s]+)\]$")
+MERGED_NAME_RE = re.compile(r"^\[(?P<tag>[^\]\s]+)\]\s*(?P<name>[^\s\[\]]+)$")
 SERVER_TOKEN_RE = re.compile(r"^[S\$]?\d{1,4}$")
-NAME_TOKEN_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\-]{2,}$")
+NAME_TOKEN_RE = re.compile(r"^[^\W_][^\s\[\]]{1,}$", re.UNICODE)
 FULL_DATETIME_RE = re.compile(r"(20\d{2}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
 PARTIAL_DATETIME_RE = re.compile(r"(\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
 TIME_RE = re.compile(r"(\d{1,2}:\d{2}(?::\d{2})?)")
 COORD_SERVER_RE = re.compile(r"(?:^|\s)[S\$]?(\d{1,4})(?:\s|$)")
-OPS_NAME_RE = re.compile(r"(\[[A-Za-z0-9]+\]\s*[A-Za-z0-9_\-]+)")
-TAGGED_NAME_RE = re.compile(r"^\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[^\s\[\]]+)$")
+OPS_NAME_RE = re.compile(r"(\[[^\]\s]+\]\s*[^\s\[\]]+)")
+TAGGED_NAME_RE = re.compile(r"^\[(?P<tag>[^\]\s]+)\]\s*(?P<name>[^\s\[\]]+)$")
 OPS_THEFT_WORDS = (
     "stole",
     "rob",
@@ -74,6 +75,37 @@ class ParseError(Exception):
     pass
 
 
+_OCR_LANG_CACHE: str | None | bool = False
+
+
+def _preferred_ocr_lang() -> str | None:
+    global _OCR_LANG_CACHE
+    if _OCR_LANG_CACHE is not False:
+        return _OCR_LANG_CACHE
+    env_value = os.getenv("ATTACK_SCANNER_TESSERACT_LANGS")
+    if env_value:
+        _OCR_LANG_CACHE = env_value
+        return env_value
+    try:
+        installed = set(pytesseract.get_languages(config=""))
+    except Exception:
+        _OCR_LANG_CACHE = None
+        return None
+    preferred = [lang for lang in ("eng", "rus", "spa") if lang in installed]
+    _OCR_LANG_CACHE = "+".join(preferred) if preferred else None
+    return _OCR_LANG_CACHE
+
+
+def ocr_image_to_string(image: Image.Image, config: str) -> str:
+    lang = _preferred_ocr_lang()
+    try:
+        if lang:
+            return pytesseract.image_to_string(image, config=config, lang=lang)
+        return pytesseract.image_to_string(image, config=config)
+    except pytesseract.TesseractError:
+        return pytesseract.image_to_string(image, config=config)
+
+
 def load_image(image_bytes: bytes) -> Image.Image:
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
@@ -87,7 +119,14 @@ def enhance_for_ocr(image: Image.Image, scale: float = 2.0, contrast: float = 2.
 
 
 def ocr_words(image: Image.Image, config: str) -> list[dict]:
-    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, config=config)
+    lang = _preferred_ocr_lang()
+    try:
+        if lang:
+            data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, config=config, lang=lang)
+        else:
+            data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, config=config)
+    except pytesseract.TesseractError:
+        data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT, config=config)
     words: list[dict] = []
     for i, raw in enumerate(data["text"]):
         text = (raw or "").strip()
@@ -111,6 +150,22 @@ def ocr_words(image: Image.Image, config: str) -> list[dict]:
             }
         )
     return words
+
+
+def image_text_candidates(image: Image.Image, configs: tuple[str, ...] = ("--psm 6", "--psm 11")) -> list[str]:
+    images = [
+        image,
+        enhance_for_ocr(image, scale=1.6, contrast=2.4),
+        enhance_for_ocr(image, scale=2.2, contrast=2.8),
+    ]
+    texts: list[str] = []
+    for candidate in images:
+        for config in configs:
+            try:
+                texts.append(ocr_image_to_string(candidate, config=config))
+            except pytesseract.TesseractError:
+                continue
+    return texts
 
 
 def group_words_into_lines(words: list[dict], tolerance: int = 18) -> list[list[dict]]:
@@ -569,6 +624,83 @@ def _parse_name_fragment(fragment: str) -> tuple[str | None, str]:
     return None, fragment
 
 
+def _event_key(event: ParsedAttackEvent) -> tuple[str, str | None, str | None]:
+    return (event.attacker_name.lower(), event.attacker_alliance_tag, event.occurred_at_text)
+
+
+def parse_caravan_report(image_bytes: bytes, default_year: int | None = None, fallback_server_id: int | None = None) -> list[ParsedAttackEvent]:
+    image = load_image(image_bytes)
+    texts = image_text_candidates(image, configs=("--psm 6", "--psm 11"))
+
+    all_names: list[tuple[str | None, str]] = []
+    for text in texts:
+        for raw_name in find_tagged_names(text):
+            parsed = _parse_name_fragment(raw_name)
+            if parsed not in all_names:
+                all_names.append(parsed)
+    if len(all_names) < 2:
+        raise ParseError("Could not find victim and attackers in the caravan image.")
+
+    victim_alliance, victim_name = all_names[0]
+    events: list[ParsedAttackEvent] = []
+    seen: set[tuple[str, str | None, str | None]] = set()
+
+    for text in texts:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for idx, line in enumerate(lines):
+            occurred_at, occurred_at_text = _ops_datetime_from_text(line, default_year=default_year)
+            if not occurred_at_text:
+                continue
+            end_idx = len(lines)
+            for next_idx in range(idx + 1, len(lines)):
+                if _ops_datetime_from_text(lines[next_idx], default_year=default_year)[1]:
+                    end_idx = next_idx
+                    break
+            window = " ".join(lines[idx:end_idx])
+            for raw_name in find_tagged_names(window):
+                attacker_alliance, attacker_name = _parse_name_fragment(raw_name)
+                if attacker_name == victim_name and attacker_alliance == victim_alliance:
+                    continue
+                event = ParsedAttackEvent(
+                    attack_type="caravan",
+                    attacker_name=attacker_name,
+                    attacker_alliance_tag=attacker_alliance,
+                    defender_name=victim_name,
+                    defender_alliance_tag=victim_alliance,
+                    server_id=fallback_server_id,
+                    occurred_at=occurred_at,
+                    occurred_at_text=occurred_at_text,
+                    notes="Parsed from caravan attack report",
+                    parser_confidence=0.74,
+                )
+                key = _event_key(event)
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append(event)
+
+    if not events:
+        for attacker_alliance, attacker_name in all_names[1:]:
+            event = ParsedAttackEvent(
+                attack_type="caravan",
+                attacker_name=attacker_name,
+                attacker_alliance_tag=attacker_alliance,
+                defender_name=victim_name,
+                defender_alliance_tag=victim_alliance,
+                server_id=fallback_server_id,
+                notes="Parsed from caravan attack report",
+                parser_confidence=0.58,
+            )
+            key = _event_key(event)
+            if key not in seen:
+                seen.add(key)
+                events.append(event)
+
+    if not events:
+        raise ParseError("Could not find caravan attackers in the image.")
+    return events
+
+
 def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallback_server_id: int | None = None) -> list[ParsedAttackEvent]:
     image = load_image(image_bytes)
     arr = np.array(image)
@@ -627,7 +759,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
 
 def find_tagged_names(text: str) -> list[str]:
     matches: list[str] = []
-    for match in re.finditer(r"\[(?P<tag>[A-Za-z0-9]+)\]\s*(?P<name>[^\s\[\]]+)", text):
+    for match in re.finditer(r"\[(?P<tag>[^\]\s]+)\]\s*(?P<name>[^\s\[\]]+)", text):
         name = match.group("name").strip().strip(".,;:!?)")
         if not name:
             continue
