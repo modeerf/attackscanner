@@ -117,4 +117,5 @@ If `ATTACK_SCANNER_DEFAULT_SERVER` is set, you can omit `server=78` from Discord
 - The Discord bot uses the same database as the web app, so anything scanned in Discord appears on the dashboard.
 - Records older than 30 days are hidden from normal views by a startup retention pass. Their database rows and images are retained for review at `/admin/deleted`.
 - Ops screenshots usually do not visibly show the defender, so those entries are stored with a blank defender.
+- If OCR added a stray leading `J` to attacker names, preview repairs with `python -m app.cleanup_j_prefixes`, then apply them with `python -m app.cleanup_j_prefixes --apply`.
 - SQLite is fine for a starter deployment. For heavier multi-user usage, moving to PostgreSQL would be the next upgrade.

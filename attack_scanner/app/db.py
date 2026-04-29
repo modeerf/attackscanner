@@ -112,6 +112,13 @@ def normalize_name(name: str) -> str:
     return " ".join(name.strip().lower().split())
 
 
+def normalize_ocr_player_name(name: str) -> str:
+    name = name.strip()
+    if len(name) >= 4 and name.startswith("J") and name[1].isupper() and name[2].islower():
+        return name[1:]
+    return name
+
+
 def normalize_alliance_tag(tag: str | None) -> str | None:
     if tag is None:
         return None
@@ -174,6 +181,9 @@ def add_attack(
     raw_parse_json: dict | list | None,
     source_image_hash: str | None = None,
 ) -> int:
+    attacker_name = normalize_ocr_player_name(attacker_name)
+    if defender_name:
+        defender_name = normalize_ocr_player_name(defender_name)
     attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
     defender_alliance_tag = normalize_alliance_tag(defender_alliance_tag)
     attacker = get_or_create_player(conn, attacker_name, server_id=server_id, alliance_tag=attacker_alliance_tag)
@@ -314,6 +324,81 @@ def soft_delete_expired_attacks(conn: sqlite3.Connection, days: int = 30) -> int
     for row in rows:
         delete_attack(conn, row["id"], delete_reason=f"Automatic {days}-day retention")
     return len(rows)
+
+
+def j_prefix_attacker_candidates(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT server_id,
+               attacker_alliance_tag,
+               attacker_name,
+               COUNT(*) AS attack_count,
+               MIN(id) AS first_attack_id,
+               MAX(id) AS last_attack_id
+        FROM attacks
+        WHERE attacker_name GLOB 'J[A-Z]*'
+        GROUP BY server_id, attacker_alliance_tag, attacker_name
+        ORDER BY attack_count DESC, attacker_name ASC
+        """
+    ).fetchall()
+    candidates: list[dict] = []
+    for row in rows:
+        proposed = normalize_ocr_player_name(row["attacker_name"])
+        if proposed == row["attacker_name"]:
+            continue
+        candidates.append(
+            {
+                "server_id": row["server_id"],
+                "attacker_alliance_tag": row["attacker_alliance_tag"],
+                "old_name": row["attacker_name"],
+                "new_name": proposed,
+                "attack_count": row["attack_count"],
+                "first_attack_id": row["first_attack_id"],
+                "last_attack_id": row["last_attack_id"],
+            }
+        )
+    return candidates
+
+
+def repair_j_prefixed_attackers(conn: sqlite3.Connection, apply: bool = False) -> list[dict]:
+    candidates = j_prefix_attacker_candidates(conn)
+    if not apply:
+        return candidates
+    for candidate in candidates:
+        player = get_or_create_player(
+            conn,
+            candidate["new_name"],
+            server_id=candidate["server_id"],
+            alliance_tag=candidate["attacker_alliance_tag"],
+        )
+        conn.execute(
+            """
+            UPDATE attacks
+            SET attacker_name = ?,
+                attacker_player_id = ?
+            WHERE attacker_name = ?
+              AND server_id IS ?
+              AND attacker_alliance_tag IS ?
+            """,
+            (
+                candidate["new_name"],
+                player["id"],
+                candidate["old_name"],
+                candidate["server_id"],
+                candidate["attacker_alliance_tag"],
+            ),
+        )
+    stale_players = conn.execute(
+        """
+        SELECT p.id
+        FROM players p
+        WHERE p.name GLOB 'J[A-Z]*'
+          AND NOT EXISTS (SELECT 1 FROM attacks a WHERE a.attacker_player_id = p.id OR a.defender_player_id = p.id)
+        """
+    ).fetchall()
+    for player in stale_players:
+        conn.execute("DELETE FROM players WHERE id = ?", (player["id"],))
+    return candidates
 
 
 def recent_attacks(conn: sqlite3.Connection, limit: int = 20, server_id: int | None = None) -> list[sqlite3.Row]:

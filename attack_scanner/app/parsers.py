@@ -16,9 +16,9 @@ ALLIANCE_TAG_RE = re.compile(r"^\[(?P<tag>[^\]\s]+)\]$")
 MERGED_NAME_RE = re.compile(r"^\[(?P<tag>[^\]\s]+)\]\s*(?P<name>[^\s\[\]]+)$")
 SERVER_TOKEN_RE = re.compile(r"^[S\$]?\d{1,4}$")
 NAME_TOKEN_RE = re.compile(r"^[^\W_][^\s\[\]]{1,}$", re.UNICODE)
-FULL_DATETIME_RE = re.compile(r"(20\d{2}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
-PARTIAL_DATETIME_RE = re.compile(r"(\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
-TIME_RE = re.compile(r"(\d{1,2}:\d{2}(?::\d{2})?)")
+FULL_DATETIME_RE = re.compile(r"(20\d{2}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)")
+PARTIAL_DATETIME_RE = re.compile(r"(\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)")
+TIME_RE = re.compile(r"(\d{1,2}:\d{1,2}(?::\d{1,2})?)")
 COORD_SERVER_RE = re.compile(r"(?:^|\s)[S\$]?(\d{1,4})(?:\s|$)")
 OPS_NAME_RE = re.compile(r"(\[[^\]\s]+\]\s*[^\s\[\]]+)")
 TAGGED_NAME_RE = re.compile(r"^\[(?P<tag>[^\]\s]+)\]\s*(?P<name>[^\s\[\]]+)$")
@@ -194,6 +194,16 @@ def normalize_server_id(raw: str | None) -> int | None:
 def _normalize_datetime_value(raw: str, default_year: int | None = None) -> tuple[str | None, str | None]:
     raw = raw.strip().replace("/", "-")
     raw = re.sub(r"\s+", " ", raw)
+    time_match = re.search(r"(?P<hour>\d{1,2}):(?P<minute>\d{1,2})(?::(?P<second>\d{1,2}))?$", raw)
+    if time_match:
+        hour = int(time_match.group("hour"))
+        minute = int(time_match.group("minute"))
+        second = int(time_match.group("second") or 0)
+        raw = re.sub(
+            r"\d{1,2}:\d{1,2}(?::\d{1,2})?$",
+            f"{hour:02d}:{minute:02d}:{second:02d}",
+            raw,
+        )
     patterns = [
         ("%Y-%m-%d %H:%M:%S", True),
         ("%Y-%m-%d %H:%M", True),
@@ -279,7 +289,7 @@ def extract_attack_datetime(image: Image.Image, default_year: int | None = None)
             min(prepared.width, word["left"] + word["width"] + 280),
             min(prepared.height, word["top"] + word["height"] + 25),
         ))
-        time_text = pytesseract.image_to_string(sub, config="--psm 13 -c tessedit_char_whitelist=0123456789:")
+        time_text = ocr_image_to_string(sub, config="--psm 13 -c tessedit_char_whitelist=0123456789:")
         time_match = TIME_RE.search(time_text)
         if time_match:
             candidate = _normalize_datetime_value(f"{year}-{month:02d}-{day:02d} {time_match.group(1)}", default_year)
@@ -299,7 +309,7 @@ def extract_attack_datetime(image: Image.Image, default_year: int | None = None)
             int(prepared.width * x2r),
             int(prepared.height * y2r),
         ))
-        raw = pytesseract.image_to_string(sub, config="--psm 13 -c tessedit_char_whitelist=0123456789:- ")
+        raw = ocr_image_to_string(sub, config="--psm 13 -c tessedit_char_whitelist=0123456789:- ")
         candidate = _parse_lenient_attack_datetime(raw)
         if candidate[0]:
             return candidate
@@ -307,7 +317,7 @@ def extract_attack_datetime(image: Image.Image, default_year: int | None = None)
     if best_guess:
         return best_guess
 
-    crop_text = pytesseract.image_to_string(prepared, config="--psm 11")
+    crop_text = ocr_image_to_string(prepared, config="--psm 11")
     match = FULL_DATETIME_RE.search(crop_text)
     if match:
         return _normalize_datetime_value(match.group(1), default_year)
@@ -316,7 +326,7 @@ def extract_attack_datetime(image: Image.Image, default_year: int | None = None)
     if candidate[0]:
         return candidate
 
-    full_text = pytesseract.image_to_string(enhance_for_ocr(image, scale=1.75, contrast=2.5), config="--psm 6")
+    full_text = ocr_image_to_string(enhance_for_ocr(image, scale=1.75, contrast=2.5), config="--psm 6")
     match = FULL_DATETIME_RE.search(full_text) or PARTIAL_DATETIME_RE.search(full_text)
     if match:
         return _normalize_datetime_value(match.group(1), default_year)
@@ -401,7 +411,7 @@ def parse_battle_report(image_bytes: bytes, default_year: int | None = None, fal
     occurred_at, occurred_at_text = extract_attack_datetime(image, default_year=default_year)
     server_id = attacker.get("server_id") or defender.get("server_id") or fallback_server_id
     if server_id is None:
-        server_match = COORD_SERVER_RE.search(pytesseract.image_to_string(image, config="--psm 6"))
+        server_match = COORD_SERVER_RE.search(ocr_image_to_string(image, config="--psm 6"))
         if server_match:
             server_id = normalize_server_id(server_match.group(1))
 
@@ -519,8 +529,8 @@ def _fallback_ops_events_from_red_regions(
         crop = image.crop(crop_box)
         prepared = enhance_for_ocr(crop, scale=2.5, contrast=2.8)
         text_candidates = [
-            pytesseract.image_to_string(crop, config="--psm 7"),
-            pytesseract.image_to_string(prepared, config="--psm 7"),
+            ocr_image_to_string(crop, config="--psm 7"),
+            ocr_image_to_string(prepared, config="--psm 7"),
         ]
         row_crop = image.crop(
             (
@@ -530,7 +540,7 @@ def _fallback_ops_events_from_red_regions(
                 min(image.height, y + max(h, 38) + 100),
             )
         )
-        row_text = pytesseract.image_to_string(row_crop, config="--psm 6")
+        row_text = ocr_image_to_string(row_crop, config="--psm 6")
         occurred_at, occurred_at_text = _ops_datetime_from_text(row_text, default_year=default_year)
 
         for text in text_candidates:
@@ -572,9 +582,9 @@ def _fallback_ops_events_from_report_text(
         prepared = enhance_for_ocr(crop, scale=2.6, contrast=2.6)
         texts.extend(
             [
-                pytesseract.image_to_string(crop, config="--psm 6"),
-                pytesseract.image_to_string(prepared, config="--psm 6"),
-                pytesseract.image_to_string(prepared, config="--psm 11"),
+                ocr_image_to_string(crop, config="--psm 6"),
+                ocr_image_to_string(prepared, config="--psm 6"),
+                ocr_image_to_string(prepared, config="--psm 11"),
             ]
         )
 
@@ -610,18 +620,94 @@ def _fallback_ops_events_from_report_text(
     return events
 
 
+def _events_from_ops_text(
+    text: str,
+    *,
+    default_year: int | None,
+    fallback_server_id: int | None,
+    confidence: float,
+    note: str,
+) -> list[ParsedAttackEvent]:
+    events: list[ParsedAttackEvent] = []
+    seen: set[tuple[str, str | None]] = set()
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for idx, line in enumerate(lines):
+        line_names = find_tagged_names(line)
+        if not line_names:
+            continue
+        end_idx = len(lines)
+        for next_idx in range(idx + 1, len(lines)):
+            if find_tagged_names(lines[next_idx]):
+                end_idx = next_idx
+                break
+        window = " ".join(lines[idx:end_idx])
+        if not _is_ops_theft_text(window):
+            continue
+        occurred_at, occurred_at_text = _ops_datetime_from_text(window, default_year=default_year)
+        for raw_name in line_names:
+            alliance_tag, name = _parse_name_fragment(raw_name)
+            key = (name.lower(), occurred_at_text)
+            if key in seen:
+                continue
+            seen.add(key)
+            events.append(
+                ParsedAttackEvent(
+                    attack_type="covert_ops",
+                    attacker_name=name,
+                    attacker_alliance_tag=alliance_tag,
+                    server_id=fallback_server_id,
+                    occurred_at=occurred_at,
+                    occurred_at_text=occurred_at_text,
+                    notes=note,
+                    parser_confidence=confidence + (0.06 if occurred_at_text else 0.0),
+                )
+            )
+    return events
+
+
+def _fallback_ops_events_from_all_text(
+    image: Image.Image,
+    *,
+    default_year: int | None,
+    fallback_server_id: int | None,
+) -> list[ParsedAttackEvent]:
+    events: list[ParsedAttackEvent] = []
+    seen: set[tuple[str, str | None]] = set()
+    for text in image_text_candidates(image, configs=("--psm 6", "--psm 11", "--psm 12")):
+        for event in _events_from_ops_text(
+            text,
+            default_year=default_year,
+            fallback_server_id=fallback_server_id,
+            confidence=0.70,
+            note="Parsed from covert ops full-text fallback",
+        ):
+            key = (event.attacker_name.lower(), event.occurred_at_text)
+            if key in seen:
+                continue
+            seen.add(key)
+            events.append(event)
+    return events
+
+
 def _parse_name_fragment(fragment: str) -> tuple[str | None, str]:
     fragment = fragment.strip()
     match = TAGGED_NAME_RE.match(fragment)
     if match:
-        return match.group("tag"), match.group("name")
+        return match.group("tag"), normalize_ocr_player_name(match.group("name"))
     match = MERGED_NAME_RE.match(fragment)
     if match:
-        return match.group("tag"), match.group("name")
+        return match.group("tag"), normalize_ocr_player_name(match.group("name"))
     match = re.match(r"^\[(?P<tag>[A-Za-z0-9]+)\]\s+(?P<name>[A-Za-z0-9_\-]+)$", fragment)
     if match:
-        return match.group("tag"), match.group("name")
-    return None, fragment
+        return match.group("tag"), normalize_ocr_player_name(match.group("name"))
+    return None, normalize_ocr_player_name(fragment)
+
+
+def normalize_ocr_player_name(name: str) -> str:
+    name = name.strip()
+    if len(name) >= 4 and name.startswith("J") and name[1].isupper() and name[2].islower():
+        return name[1:]
+    return name
 
 
 def _event_key(event: ParsedAttackEvent) -> tuple[str, str | None, str | None]:
@@ -748,6 +834,12 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
         )
     if not events:
         events = _fallback_ops_events_from_report_text(
+            image,
+            default_year=default_year,
+            fallback_server_id=fallback_server_id,
+        )
+    if not events:
+        events = _fallback_ops_events_from_all_text(
             image,
             default_year=default_year,
             fallback_server_id=fallback_server_id,
