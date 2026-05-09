@@ -22,6 +22,7 @@ from .db import (
     find_player_by_name,
     get_image_submission,
     init_db,
+    managed_alliance_tags,
     player_history,
     recent_attacks,
     top_alliances,
@@ -292,8 +293,11 @@ async def handle_scan_message(message: discord.Message, attachments: list[discor
     options = parse_scan_options(message.content)
     saved_lines: list[str] = []
     error_lines: list[str] = []
+    alert_lines: list[str] = []
+    alert_roles: list[discord.Role] = []
 
     with connect() as conn:
+        server78_alliances = set(managed_alliance_tags(conn, server_id=78))
         for attachment in attachments:
             try:
                 raw = await attachment.read()
@@ -332,16 +336,70 @@ async def handle_scan_message(message: discord.Message, attachments: list[discor
                     conn.execute("UPDATE image_submissions SET first_attack_id = ? WHERE image_hash = ?", (created_ids[0], attachment_hash))
                 names = ", ".join(event.attacker_name for event in events)
                 saved_lines.append(f"{attachment.filename}: saved {len(created_ids)} event(s) for {names} (IDs: {', '.join(map(str, created_ids))})")
+                attachment_alerts, attachment_roles = build_alliance_alerts(message.guild, attachment.filename, events, created_ids, server78_alliances)
+                alert_lines.extend(attachment_alerts)
+                alert_roles.extend(role for role in attachment_roles if role not in alert_roles)
             except Exception as exc:
                 error_lines.append(f"{attachment.filename}: {exc}")
 
     chunks = ["Processed your image upload."]
     if saved_lines:
         chunks.append("Saved:\n" + "\n".join(f"- {line}" for line in saved_lines))
+    if alert_lines:
+        chunks.append("Alliance alerts:\n" + "\n".join(f"- {line}" for line in alert_lines))
     if error_lines:
         chunks.append("Errors:\n" + "\n".join(f"- {line}" for line in error_lines))
     chunks.append("Commands: `@Bot stats`, `@Bot recent limit=10`, `@Bot history Holash server=78`. Image scans can include `battle`, `ops victim=AVL`, or `caravan`.")
-    await message.reply("\n\n".join(chunks))
+    await message.reply(
+        "\n\n".join(chunks),
+        allowed_mentions=discord.AllowedMentions(
+            everyone=False,
+            users=False,
+            roles=alert_roles,
+            replied_user=False,
+        ),
+        mention_author=False,
+    )
+
+
+def build_alliance_alerts(
+    guild: discord.Guild | None,
+    filename: str | None,
+    events: Iterable[ParsedAttackEvent],
+    attack_ids: list[int],
+    server78_alliances: set[str],
+) -> tuple[list[str], list[discord.Role]]:
+    alliance_tags = sorted(
+        {
+            event.attacker_alliance_tag
+            for event in events
+            if event.server_id == 78 and event.attacker_alliance_tag in server78_alliances
+        }
+    )
+    if not alliance_tags:
+        return [], []
+
+    roles = {role_key(role.name): role for role in guild.roles} if guild else {}
+    lines: list[str] = []
+    mentioned_roles: list[discord.Role] = []
+    ids = ", ".join(map(str, attack_ids)) or "pending"
+    source = filename or "image"
+
+    for alliance_tag in alliance_tags:
+        role = roles.get(role_key(alliance_tag))
+        target = f"{role.mention} ([{alliance_tag}])" if role else f"**[{alliance_tag}]**"
+        if role:
+            mentioned_roles.append(role)
+        lines.append(f"{target}: violation recorded from {source} (attack ID(s): {ids}).")
+
+    return lines, mentioned_roles
+
+
+def role_key(value: str) -> str:
+    normalized = value.strip()
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1].strip()
+    return normalized.casefold()
 
 
 def main() -> None:

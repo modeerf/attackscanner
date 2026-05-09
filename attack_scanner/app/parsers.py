@@ -797,7 +797,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
         word["red_score"] = red_score(arr, word["left"], word["top"], word["width"], word["height"])
 
     events: list[ParsedAttackEvent] = []
-    seen: set[tuple[str, str | None]] = set()
+    seen: set[tuple[str, str | None, str | None]] = set()
     for line in group_words_into_lines(words, tolerance=20):
         text = " ".join(item["text"] for item in line)
         matches = find_tagged_names(text)
@@ -810,40 +810,44 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
             continue
         occurred_at, occurred_at_text = _ops_datetime_from_text(text, default_year=default_year)
         for raw_name in matches:
-            alliance_tag, name = _parse_name_fragment(raw_name)
-            key = (name.lower(), occurred_at_text)
+            event = _event_from_ops_match(
+                raw_name,
+                occurred_at=occurred_at,
+                occurred_at_text=occurred_at_text,
+                fallback_server_id=fallback_server_id,
+                confidence=0.75 + (0.12 if max_red > 0.25 else 0.0) + (0.08 if occurred_at_text else 0.0) + (0.06 if is_theft_row else 0.0),
+            )
+            key = _event_key(event)
             if key in seen:
                 continue
             seen.add(key)
-            confidence = 0.75 + (0.12 if max_red > 0.25 else 0.0) + (0.08 if occurred_at_text else 0.0) + (0.06 if is_theft_row else 0.0)
-            events.append(
-                _event_from_ops_match(
-                    raw_name,
-                    occurred_at=occurred_at,
-                    occurred_at_text=occurred_at_text,
-                    fallback_server_id=fallback_server_id,
-                    confidence=confidence,
-                )
-            )
-    if not events:
-        events = _fallback_ops_events_from_red_regions(
+            events.append(event)
+
+    fallback_batches = [
+        _fallback_ops_events_from_red_regions(
             image,
             arr,
             default_year=default_year,
             fallback_server_id=fallback_server_id,
-        )
-    if not events:
-        events = _fallback_ops_events_from_report_text(
+        ),
+        _fallback_ops_events_from_report_text(
             image,
             default_year=default_year,
             fallback_server_id=fallback_server_id,
-        )
-    if not events:
-        events = _fallback_ops_events_from_all_text(
+        ),
+        _fallback_ops_events_from_all_text(
             image,
             default_year=default_year,
             fallback_server_id=fallback_server_id,
-        )
+        ),
+    ]
+    for batch in fallback_batches:
+        for event in batch:
+            key = _event_key(event)
+            if key in seen:
+                continue
+            seen.add(key)
+            events.append(event)
     if not events:
         raise ParseError("Could not find any red attacker names in the covert ops image.")
     return events

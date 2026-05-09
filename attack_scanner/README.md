@@ -34,6 +34,7 @@ This project now has **two entry points** that share the same parser and SQLite 
 - Add `year=2026` to override the current calendar year if OCR cannot infer the year.
 - Include `ops`, `battle`, or `caravan` in the post text to force the parser type, otherwise the bot auto-detects.
 - For ops screenshots, add `victim=AVL`, `victim_alliance=AVL`, or `defender_alliance=AVL` to record the victim alliance.
+- After a successful Server 78 image scan, the bot alerts each offending attacker alliance that is on the managed Server 78 alliance list. If the Discord server has a role named `AVL` or `[AVL]`, the bot mentions that role; otherwise it prints the alliance tag.
 
 ## Setup
 
