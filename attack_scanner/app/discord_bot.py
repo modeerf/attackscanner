@@ -7,7 +7,7 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
@@ -283,7 +283,7 @@ def image_hash(data: bytes) -> str:
 
 def save_discord_attachment(filename: str | None, data: bytes) -> str:
     suffix = Path(filename or "discord-upload.png").suffix or ".png"
-    saved_name = f"{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}-{uuid4().hex}{suffix}"
+    saved_name = f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid4().hex}{suffix}"
     path = UPLOADS_DIR / saved_name
     path.write_bytes(data)
     return saved_name
