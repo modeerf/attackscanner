@@ -428,6 +428,92 @@ def repair_j_prefixed_attackers(conn: sqlite3.Connection, apply: bool = False) -
     return candidates
 
 
+def duplicate_player_groups(conn: sqlite3.Connection) -> list[dict]:
+    groups = conn.execute(
+        """
+        SELECT server_id,
+               normalized_name,
+               COUNT(*) AS player_count,
+               GROUP_CONCAT(id) AS player_ids,
+               MIN(id) AS canonical_id
+        FROM players
+        GROUP BY server_id, normalized_name
+        HAVING COUNT(*) > 1
+        ORDER BY player_count DESC, normalized_name ASC
+        """
+    ).fetchall()
+    results: list[dict] = []
+    for group in groups:
+        players = conn.execute(
+            """
+            SELECT p.*,
+                   (SELECT COUNT(*) FROM attacks a WHERE a.attacker_player_id = p.id) AS attacker_refs,
+                   (SELECT COUNT(*) FROM attacks a WHERE a.defender_player_id = p.id) AS defender_refs
+            FROM players p
+            WHERE p.server_id IS ? AND p.normalized_name = ?
+            ORDER BY (attacker_refs + defender_refs) DESC, p.id ASC
+            """,
+            (group["server_id"], group["normalized_name"]),
+        ).fetchall()
+        canonical = players[0]
+        duplicate_ids = [row["id"] for row in players if row["id"] != canonical["id"]]
+        results.append(
+            {
+                "server_id": group["server_id"],
+                "normalized_name": group["normalized_name"],
+                "canonical_id": canonical["id"],
+                "canonical_name": canonical["name"],
+                "duplicate_ids": duplicate_ids,
+                "player_count": group["player_count"],
+                "attack_refs": sum(row["attacker_refs"] + row["defender_refs"] for row in players),
+            }
+        )
+    return results
+
+
+def merge_duplicate_players(conn: sqlite3.Connection, apply: bool = False) -> list[dict]:
+    groups = duplicate_player_groups(conn)
+    if not apply:
+        return groups
+
+    for group in groups:
+        duplicate_ids = group["duplicate_ids"]
+        if not duplicate_ids:
+            continue
+        placeholders = ", ".join("?" for _ in duplicate_ids)
+        canonical_id = group["canonical_id"]
+        conn.execute(
+            f"UPDATE attacks SET attacker_player_id = ? WHERE attacker_player_id IN ({placeholders})",
+            (canonical_id, *duplicate_ids),
+        )
+        conn.execute(
+            f"UPDATE attacks SET defender_player_id = ? WHERE defender_player_id IN ({placeholders})",
+            (canonical_id, *duplicate_ids),
+        )
+        canonical = conn.execute("SELECT * FROM players WHERE id = ?", (canonical_id,)).fetchone()
+        if canonical and not canonical["current_alliance_tag"]:
+            alliance = conn.execute(
+                f"""
+                SELECT current_alliance_tag
+                FROM players
+                WHERE id IN ({placeholders})
+                  AND current_alliance_tag IS NOT NULL
+                  AND current_alliance_tag != ''
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                duplicate_ids,
+            ).fetchone()
+            if alliance:
+                conn.execute(
+                    "UPDATE players SET current_alliance_tag = ? WHERE id = ?",
+                    (alliance["current_alliance_tag"], canonical_id),
+                )
+        conn.execute(f"DELETE FROM players WHERE id IN ({placeholders})", duplicate_ids)
+
+    return groups
+
+
 def recent_attacks(conn: sqlite3.Connection, limit: int = 20, server_id: int | None = None) -> list[sqlite3.Row]:
     return conn.execute(
         """
@@ -549,16 +635,18 @@ def attacking_player_options(
     attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
     return conn.execute(
         """
-        SELECT attacker_player_id AS player_id,
+        SELECT NULL AS player_id,
                attacker_name AS player_name,
-               attacker_alliance_tag,
-               server_id,
+               attacker_name AS filter_value,
+               MIN(attacker_alliance_tag) AS attacker_alliance_tag,
+               MIN(server_id) AS server_id,
                COUNT(*) AS attack_count
         FROM attacks
         WHERE deleted_at IS NULL
+          AND attacker_name IS NOT NULL AND attacker_name != ''
           AND (? IS NULL OR server_id = ?)
           AND (? IS NULL OR attacker_alliance_tag = ?)
-        GROUP BY attacker_player_id, attacker_name, attacker_alliance_tag, server_id
+        GROUP BY attacker_name
         ORDER BY attack_count DESC, attacker_name ASC
         LIMIT 200
         """,
@@ -573,15 +661,16 @@ def attacking_player_options_from_attacks(
     attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
     return conn.execute(
         """
-        SELECT MIN(attacker_player_id) AS player_id,
+        SELECT NULL AS player_id,
                attacker_name AS player_name,
-               attacker_alliance_tag,
+               attacker_name AS filter_value,
+               MIN(attacker_alliance_tag) AS attacker_alliance_tag,
                COUNT(*) AS attack_count
         FROM attacks
         WHERE deleted_at IS NULL
           AND attacker_name IS NOT NULL AND attacker_name != ''
           AND (? IS NULL OR attacker_alliance_tag = ?)
-        GROUP BY attacker_name, attacker_alliance_tag
+        GROUP BY attacker_name
         ORDER BY attack_count DESC, attacker_name ASC
         LIMIT 500
         """,

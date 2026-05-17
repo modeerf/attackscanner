@@ -417,8 +417,9 @@ def analytics_page(request: Request):
         if not player_filters:
             player_filters = [
                 {
-                    "player_id": row["attacker_player_id"],
+                    "player_id": None,
                     "player_name": row["attacker_name"],
+                    "filter_value": row["attacker_name"],
                     "attacker_alliance_tag": row["attacker_alliance_tag"],
                     "server_id": row["server_id"],
                     "attack_count": row["attack_count"],
