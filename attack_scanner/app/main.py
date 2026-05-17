@@ -373,6 +373,12 @@ def stats_page(request: Request, server_id: str | None = None):
         try:
             alliance_filters = attacking_alliance_options(conn, server_id=server)
             player_filters = attacking_player_options(conn, server_id=server, attacker_alliance_tag=alliance_filter)
+            if server is not None and not alliance_filters:
+                alliance_filters = attacking_alliance_options(conn)
+            if server is not None and not player_filters:
+                player_filters = attacking_player_options(conn, attacker_alliance_tag=alliance_filter)
+            if alliance_filter and not player_filters:
+                player_filters = attacking_player_options(conn, server_id=server)
             timeline_rows = attack_type_timeline(
                 conn,
                 server_id=server,
