@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-US">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Last Assylum: Plague Violation Tracker{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css?v=plague-20260425">
+  <script src="/static/i18n.js?v=20260517" defer></script>
 </head>
 <body>
 <header class="site-header">
@@ -18,6 +19,17 @@
       <a href="/attacks/new">Manual Add</a>
       <a href="/manual">Manual</a>
     </nav>
+    <label class="language-switcher">
+      <span>Language</span>
+      <select id="language-select" aria-label="Language">
+        <option value="auto">Browser default</option>
+        <option value="en-US">English (US)</option>
+        <option value="en-AU">English (Australia)</option>
+        <option value="fr">Francais</option>
+        <option value="es">Espanol</option>
+        <option value="pt">Portugues</option>
+      </select>
+    </label>
   </div>
 </header>
 <main class="wrap">

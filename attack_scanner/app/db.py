@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS managed_alliances (
     UNIQUE(server_id, alliance_tag)
 );
 
+CREATE TABLE IF NOT EXISTS discord_user_preferences (
+    user_id TEXT PRIMARY KEY,
+    language TEXT NOT NULL DEFAULT 'en-US',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_players_server_name ON players(server_id, normalized_name);
 CREATE INDEX IF NOT EXISTS idx_attacks_server_time ON attacks(server_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_attacks_attacker ON attacks(attacker_player_id);
@@ -142,6 +148,27 @@ def normalize_existing_alliance_tags(conn: sqlite3.Connection) -> None:
                     f"UPDATE {table} SET {assignments} WHERE id = ?",
                     (*[updates[column] for column in columns], row["id"]),
                 )
+
+
+def get_discord_user_language(conn: sqlite3.Connection, user_id: int | str) -> str | None:
+    row = conn.execute(
+        "SELECT language FROM discord_user_preferences WHERE user_id = ?",
+        (str(user_id),),
+    ).fetchone()
+    return row["language"] if row else None
+
+
+def set_discord_user_language(conn: sqlite3.Connection, user_id: int | str, language: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO discord_user_preferences (user_id, language, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id) DO UPDATE SET
+            language = excluded.language,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (str(user_id), language),
+    )
 
 
 def get_or_create_player(conn: sqlite3.Connection, name: str, server_id: int | None = None, alliance_tag: str | None = None) -> sqlite3.Row:
