@@ -31,12 +31,14 @@ from .db import (
     connect,
     delete_attack,
     deleted_attacks,
+    duplicate_player_groups,
     get_attack,
     get_image_submission,
     get_player,
     init_db,
     is_managed_alliance,
     managed_alliance_tags,
+    merge_duplicate_players,
     player_history,
     recent_attacks,
     recent_attacks_for_alliance,
@@ -614,7 +616,7 @@ def deleted_records_page(request: Request, password: str | None = None):
     return templates.TemplateResponse(
         request,
         "deleted_records.html",
-        {"request": request, "authorized": True, "records": records},
+        {"request": request, "authorized": True, "records": records, "password": password},
     )
 
 
@@ -654,6 +656,50 @@ def remove_server78_alliance(password: str = Form(""), alliance_tag: str = Form(
     with connect() as conn:
         remove_managed_alliance(conn, alliance_tag, server_id=78)
     return RedirectResponse(f"/admin/server78-alliances?password={quote(password)}&msg={quote('Alliance removed.')}", status_code=303)
+
+
+@app.get("/admin/data", response_class=HTMLResponse)
+def data_management_page(request: Request, password: str | None = None, msg: str | None = None, error: str | None = None):
+    if password != DELETE_PASSWORD:
+        return templates.TemplateResponse(
+            request,
+            "data_management.html",
+            {
+                "request": request,
+                "authorized": False,
+                "password": "",
+                "duplicate_groups": [],
+                "msg": msg,
+                "error": error,
+            },
+        )
+    with connect() as conn:
+        duplicate_groups = duplicate_player_groups(conn)
+    return templates.TemplateResponse(
+        request,
+        "data_management.html",
+        {
+            "request": request,
+            "authorized": True,
+            "password": password,
+            "duplicate_groups": duplicate_groups,
+            "msg": msg,
+            "error": error,
+        },
+    )
+
+
+@app.post("/admin/data/merge-duplicate-players")
+def merge_duplicate_players_route(password: str = Form("")):
+    if password != DELETE_PASSWORD:
+        return _redirect_with_error("/admin/data", "Password is incorrect.")
+    with connect() as conn:
+        groups = merge_duplicate_players(conn, apply=True)
+    merged_count = sum(len(group["duplicate_ids"]) for group in groups)
+    return RedirectResponse(
+        f"/admin/data?password={quote(password)}&msg={quote(f'Merged {merged_count} duplicate player row(s).')}",
+        status_code=303,
+    )
 
 
 @app.get("/api/attacks")

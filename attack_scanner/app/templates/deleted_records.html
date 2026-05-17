@@ -11,6 +11,7 @@
   </form>
   {% else %}
   <p class="muted">These records are hidden from normal dashboards and stats. Images remain stored, but their upload hashes were released when the record was deleted.</p>
+  <p><a href="/admin/data?password={{ password }}">Data management</a></p>
   {% endif %}
 </section>
 

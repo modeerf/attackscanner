@@ -13,6 +13,7 @@
   </form>
   {% else %}
   <p class="muted">Alliances on this list render green. Any alliance not listed renders red.</p>
+  <p><a href="/admin/data?password={{ password }}">Data management</a></p>
   <form class="search-form" method="post" action="/admin/server78-alliances/add">
     <input type="hidden" name="password" value="{{ password }}">
     <input type="text" name="alliance_tag" placeholder="Alliance tag, for example AVL" required>
