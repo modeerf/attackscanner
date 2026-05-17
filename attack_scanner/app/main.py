@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import mimetypes
 import sqlite3
 from datetime import datetime
@@ -363,19 +364,26 @@ def stats_page(request: Request, server_id: str | None = None):
     server = _int_or_none(server_id)
     alliance_filter = _alliance_tag_or_none(request.query_params.get("attacker_alliance"))
     attacker_player_id = _int_or_none(request.query_params.get("attacker_player_id"))
+    chart_error = None
     with connect() as conn:
         attackers = top_attackers(conn, server_id=server, limit=10)
         alliances = top_alliances(conn, server_id=server, limit=10)
         attacked_alliances = top_attacked_alliances(conn, server_id=server, limit=10)
         matchups = alliance_matchups(conn, server_id=server, limit=15)
-        alliance_filters = attacking_alliance_options(conn, server_id=server)
-        player_filters = attacking_player_options(conn, server_id=server, attacker_alliance_tag=alliance_filter)
-        timeline_rows = attack_type_timeline(
-            conn,
-            server_id=server,
-            attacker_alliance_tag=alliance_filter,
-            attacker_player_id=attacker_player_id,
-        )
+        try:
+            alliance_filters = attacking_alliance_options(conn, server_id=server)
+            player_filters = attacking_player_options(conn, server_id=server, attacker_alliance_tag=alliance_filter)
+            timeline_rows = attack_type_timeline(
+                conn,
+                server_id=server,
+                attacker_alliance_tag=alliance_filter,
+                attacker_player_id=attacker_player_id,
+            )
+        except sqlite3.Error as exc:
+            alliance_filters = []
+            player_filters = []
+            timeline_rows = []
+            chart_error = str(exc)
     return templates.TemplateResponse(
         request,
         "stats.html",
@@ -390,7 +398,17 @@ def stats_page(request: Request, server_id: str | None = None):
             "matchups": matchups,
             "alliance_filters": alliance_filters,
             "player_filters": player_filters,
-            "timeline_data": [dict(row) for row in timeline_rows],
+            "timeline_json": json.dumps(
+                [
+                    {
+                        "day": row["attack_day"],
+                        "attack_type": row["attack_type"],
+                        "attack_count": row["attack_count"],
+                    }
+                    for row in timeline_rows
+                ]
+            ),
+            "chart_error": chart_error,
             "top_alliance": alliances[0] if alliances else None,
             "most_attacked_alliance": attacked_alliances[0] if attacked_alliances else None,
         },

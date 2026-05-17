@@ -542,6 +542,11 @@ code {
   text-align: center;
 }
 
+.chart-error {
+  margin: 12px 0 0;
+  font-size: .86rem;
+}
+
 .stat-box {
   min-height: 104px;
   padding: 14px;

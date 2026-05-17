@@ -575,7 +575,7 @@ def attack_type_timeline(
     attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
     return conn.execute(
         """
-        SELECT date(COALESCE(occurred_at, created_at)) AS day,
+        SELECT date(COALESCE(occurred_at, created_at)) AS attack_day,
                attack_type,
                COUNT(*) AS attack_count
         FROM attacks
@@ -583,8 +583,8 @@ def attack_type_timeline(
           AND (? IS NULL OR server_id = ?)
           AND (? IS NULL OR attacker_alliance_tag = ?)
           AND (? IS NULL OR attacker_player_id = ?)
-        GROUP BY day, attack_type
-        ORDER BY day ASC, attack_type ASC
+        GROUP BY date(COALESCE(occurred_at, created_at)), attack_type
+        ORDER BY date(COALESCE(occurred_at, created_at)) ASC, attack_type ASC
         """,
         (
             server_id,
