@@ -150,10 +150,24 @@ a.alliance-tag:hover {
   transform: rotate(45deg);
 }
 
+.nav-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
 .nav-row nav {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.utility-nav {
+  padding-left: 10px;
+  border-left: 1px solid rgba(112, 103, 68, .48);
 }
 
 .nav-row nav a {
@@ -176,12 +190,18 @@ a.alliance-tag:hover {
 
 .language-switcher {
   width: auto;
-  min-width: 190px;
+  min-width: 154px;
   gap: 5px;
   white-space: nowrap;
 }
 
 .language-switcher span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   color: var(--faint);
   font-size: .7rem;
 }
@@ -571,6 +591,17 @@ button:hover {
   .nav-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .nav-tools {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .utility-nav {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .language-switcher {

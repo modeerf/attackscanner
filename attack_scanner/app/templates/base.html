@@ -11,25 +11,29 @@
 <header class="site-header">
   <div class="wrap nav-row">
     <h1><a href="/">Last Assylum: Plague Violation Tracker</a></h1>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/players">Players</a>
-      <a href="/stats">Stats</a>
-      <a href="/alliances">Alliances</a>
-      <a href="/attacks/new">Manual Add</a>
-      <a href="/manual">Manual</a>
-    </nav>
-    <label class="language-switcher">
-      <span>Language</span>
-      <select id="language-select" aria-label="Language">
-        <option value="auto">Browser default</option>
-        <option value="en-US">English (US)</option>
-        <option value="en-AU">English (Australia)</option>
-        <option value="fr">Francais</option>
-        <option value="es">Espanol</option>
-        <option value="pt">Portugues</option>
-      </select>
-    </label>
+    <div class="nav-tools">
+      <nav class="primary-nav">
+        <a href="/">Dashboard</a>
+        <a href="/players">Players</a>
+        <a href="/stats">Stats</a>
+        <a href="/alliances">Alliances</a>
+      </nav>
+      <nav class="utility-nav" aria-label="Utilities">
+        <a href="/attacks/new">Add</a>
+        <a href="/manual">Docs</a>
+      </nav>
+      <label class="language-switcher">
+        <span>Language</span>
+        <select id="language-select" aria-label="Language">
+          <option value="auto">Browser default</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-AU">English (Australia)</option>
+          <option value="fr">Francais</option>
+          <option value="es">Espanol</option>
+          <option value="pt">Portugues</option>
+        </select>
+      </label>
+    </div>
   </div>
 </header>
 <main class="wrap">
