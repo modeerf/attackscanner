@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Admin - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Admin</h2>
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+  {% if not authorized %}
+  <form class="search-form" method="post" action="/admin/login">
+    <input type="password" name="password" placeholder="Password" required>
+    <span></span>
+    <button type="submit">Unlock</button>
+  </form>
+  {% else %}
+  <p class="muted">Admin tools are unlocked for this browser session.</p>
+  <form method="post" action="/admin/logout">
+    <button class="danger" type="submit">Lock admin</button>
+  </form>
+  {% endif %}
+</section>
+
+{% if authorized %}
+<section class="grid two">
+  <article class="card">
+    <h3>Data management</h3>
+    <p class="muted">Review and repair duplicate player rows.</p>
+    <p><a href="/admin/data">Open data management</a></p>
+  </article>
+  <article class="card">
+    <h3>Deleted records</h3>
+    <p class="muted">Review records hidden from dashboards and stats.</p>
+    <p><a href="/admin/deleted">Open deleted records</a></p>
+  </article>
+  <article class="card">
+    <h3>Server 78 alliances</h3>
+    <p class="muted">Manage alliances that render as protected/managed.</p>
+    <p><a href="/admin/server78-alliances">Open alliance manager</a></p>
+  </article>
+</section>
+{% endif %}
+{% endblock %}

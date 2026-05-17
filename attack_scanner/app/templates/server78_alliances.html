@@ -6,16 +6,15 @@
   {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
   {% if not authorized %}
-  <form class="search-form" method="get" action="/admin/server78-alliances">
+  <form class="search-form" method="post" action="/admin/login">
     <input type="password" name="password" placeholder="Password" required>
     <span></span>
-    <button type="submit">Manage</button>
+    <button type="submit">Unlock</button>
   </form>
   {% else %}
   <p class="muted">Alliances on this list render green. Any alliance not listed renders red.</p>
-  <p><a href="/admin/data?password={{ password }}">Data management</a></p>
+  <p><a href="/admin">Admin menu</a></p>
   <form class="search-form" method="post" action="/admin/server78-alliances/add">
-    <input type="hidden" name="password" value="{{ password }}">
     <input type="text" name="alliance_tag" placeholder="Alliance tag, for example AVL" required>
     <button type="submit">Add</button>
   </form>
@@ -35,7 +34,6 @@
           <td><span class="alliance-tag alliance-managed">Server 78</span></td>
           <td>
             <form method="post" action="/admin/server78-alliances/remove" onsubmit="return confirm('Remove this alliance from the server 78 list?');">
-              <input type="hidden" name="password" value="{{ password }}">
               <input type="hidden" name="alliance_tag" value="{{ tag }}">
               <button class="danger" type="submit">Remove</button>
             </form>

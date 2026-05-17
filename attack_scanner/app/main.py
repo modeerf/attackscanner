@@ -58,6 +58,7 @@ UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DELETE_PASSWORD = "mod4life"
+ADMIN_COOKIE = "attack_scanner_admin"
 
 app = FastAPI(title="Last Assylum: Plague Violation Tracker")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -103,6 +104,26 @@ def _duplicate_redirect() -> RedirectResponse:
 def _redirect_with_error(path: str, message: str) -> RedirectResponse:
     separator = "&" if "?" in path else "?"
     return RedirectResponse(f"{path}{separator}error={quote(message)}", status_code=303)
+
+
+def _is_admin_authorized(request: Request, password: str | None = None) -> bool:
+    return password == DELETE_PASSWORD or request.cookies.get(ADMIN_COOKIE) == DELETE_PASSWORD
+
+
+def _admin_redirect(path: str = "/admin", msg: str | None = None, error: str | None = None) -> RedirectResponse:
+    query = []
+    if msg:
+        query.append(f"msg={quote(msg)}")
+    if error:
+        query.append(f"error={quote(error)}")
+    suffix = ("?" + "&".join(query)) if query else ""
+    return RedirectResponse(f"{path}{suffix}", status_code=303)
+
+
+def _authorized_admin_redirect(path: str, msg: str | None = None, error: str | None = None) -> RedirectResponse:
+    response = _admin_redirect(path, msg=msg, error=error)
+    response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
 
 
 def _backfill_upload_hashes() -> None:
@@ -603,26 +624,56 @@ def delete_attack_route(attack_id: int, next_url: str | None = Form(None), delet
     return RedirectResponse(redirect_to, status_code=303)
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request, password: str | None = None, msg: str | None = None, error: str | None = None):
+    authorized = _is_admin_authorized(request, password)
+    response = templates.TemplateResponse(
+        request,
+        "admin.html",
+        {"request": request, "authorized": authorized, "msg": msg, "error": error},
+    )
+    if password == DELETE_PASSWORD:
+        response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
+
+
+@app.post("/admin/login")
+def admin_login(password: str = Form("")):
+    if password != DELETE_PASSWORD:
+        return _admin_redirect("/admin", error="Password is incorrect.")
+    return _authorized_admin_redirect("/admin", msg="Admin unlocked.")
+
+
+@app.post("/admin/logout")
+def admin_logout():
+    response = _admin_redirect("/admin", msg="Admin locked.")
+    response.delete_cookie(ADMIN_COOKIE)
+    return response
+
+
 @app.get("/admin/deleted", response_class=HTMLResponse)
 def deleted_records_page(request: Request, password: str | None = None):
-    if password != DELETE_PASSWORD:
+    if not _is_admin_authorized(request, password):
         return templates.TemplateResponse(
             request,
             "deleted_records.html",
-            {"request": request, "authorized": False, "records": []},
+            {"request": request, "authorized": False, "records": [], "password": ""},
         )
     with connect() as conn:
         records = deleted_attacks(conn, limit=500)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "deleted_records.html",
-        {"request": request, "authorized": True, "records": records, "password": password},
+        {"request": request, "authorized": True, "records": records, "password": ""},
     )
+    if password == DELETE_PASSWORD:
+        response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
 
 
 @app.get("/admin/server78-alliances", response_class=HTMLResponse)
 def server78_alliances_page(request: Request, password: str | None = None, msg: str | None = None, error: str | None = None):
-    if password != DELETE_PASSWORD:
+    if not _is_admin_authorized(request, password):
         return templates.TemplateResponse(
             request,
             "server78_alliances.html",
@@ -630,37 +681,40 @@ def server78_alliances_page(request: Request, password: str | None = None, msg: 
         )
     with connect() as conn:
         alliances = managed_alliance_tags(conn, server_id=78)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "server78_alliances.html",
-        {"request": request, "authorized": True, "alliances": alliances, "password": password, "msg": msg, "error": error},
+        {"request": request, "authorized": True, "alliances": alliances, "password": "", "msg": msg, "error": error},
     )
+    if password == DELETE_PASSWORD:
+        response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
 
 
 @app.post("/admin/server78-alliances/add")
-def add_server78_alliance(password: str = Form(""), alliance_tag: str = Form("")):
-    if password != DELETE_PASSWORD:
-        return _redirect_with_error("/admin/server78-alliances", "Password is incorrect.")
+def add_server78_alliance(request: Request, password: str = Form(""), alliance_tag: str = Form("")):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Password is incorrect.")
     tag = alliance_tag.strip()
     if not tag:
-        return _redirect_with_error(f"/admin/server78-alliances?password={quote(password)}", "Alliance tag is required.")
+        return _admin_redirect("/admin/server78-alliances", error="Alliance tag is required.")
     with connect() as conn:
         add_managed_alliance(conn, tag, server_id=78)
-    return RedirectResponse(f"/admin/server78-alliances?password={quote(password)}&msg={quote('Alliance added.')}", status_code=303)
+    return _authorized_admin_redirect("/admin/server78-alliances", msg="Alliance added.")
 
 
 @app.post("/admin/server78-alliances/remove")
-def remove_server78_alliance(password: str = Form(""), alliance_tag: str = Form("")):
-    if password != DELETE_PASSWORD:
-        return _redirect_with_error("/admin/server78-alliances", "Password is incorrect.")
+def remove_server78_alliance(request: Request, password: str = Form(""), alliance_tag: str = Form("")):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Password is incorrect.")
     with connect() as conn:
         remove_managed_alliance(conn, alliance_tag, server_id=78)
-    return RedirectResponse(f"/admin/server78-alliances?password={quote(password)}&msg={quote('Alliance removed.')}", status_code=303)
+    return _authorized_admin_redirect("/admin/server78-alliances", msg="Alliance removed.")
 
 
 @app.get("/admin/data", response_class=HTMLResponse)
 def data_management_page(request: Request, password: str | None = None, msg: str | None = None, error: str | None = None):
-    if password != DELETE_PASSWORD:
+    if not _is_admin_authorized(request, password):
         return templates.TemplateResponse(
             request,
             "data_management.html",
@@ -675,31 +729,31 @@ def data_management_page(request: Request, password: str | None = None, msg: str
         )
     with connect() as conn:
         duplicate_groups = duplicate_player_groups(conn)
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "data_management.html",
         {
             "request": request,
             "authorized": True,
-            "password": password,
+            "password": "",
             "duplicate_groups": duplicate_groups,
             "msg": msg,
             "error": error,
         },
     )
+    if password == DELETE_PASSWORD:
+        response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
 
 
 @app.post("/admin/data/merge-duplicate-players")
-def merge_duplicate_players_route(password: str = Form("")):
-    if password != DELETE_PASSWORD:
-        return _redirect_with_error("/admin/data", "Password is incorrect.")
+def merge_duplicate_players_route(request: Request, password: str = Form("")):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Password is incorrect.")
     with connect() as conn:
         groups = merge_duplicate_players(conn, apply=True)
     merged_count = sum(len(group["duplicate_ids"]) for group in groups)
-    return RedirectResponse(
-        f"/admin/data?password={quote(password)}&msg={quote(f'Merged {merged_count} duplicate player row(s).')}",
-        status_code=303,
-    )
+    return _authorized_admin_redirect("/admin/data", msg=f"Merged {merged_count} duplicate player row(s).")
 
 
 @app.get("/api/attacks")

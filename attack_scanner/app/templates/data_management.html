@@ -6,13 +6,14 @@
   {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
   {% if not authorized %}
-  <form class="search-form" method="get" action="/admin/data">
+  <form class="search-form" method="post" action="/admin/login">
     <input type="password" name="password" placeholder="Password" required>
     <span></span>
-    <button type="submit">Manage</button>
+    <button type="submit">Unlock</button>
   </form>
   {% else %}
   <p class="muted">Review and repair exact duplicate player rows. This rewires attack history to one canonical player record before deleting duplicate player rows.</p>
+  <p><a href="/admin">Admin menu</a></p>
   {% endif %}
 </section>
 
@@ -24,7 +25,6 @@
       <p class="muted">Duplicates are exact matches on server and normalized player name.</p>
     </div>
     <form method="post" action="/admin/data/merge-duplicate-players" onsubmit="return confirm('Merge all exact duplicate player rows?');">
-      <input type="hidden" name="password" value="{{ password }}">
       <button type="submit" {% if not duplicate_groups %}disabled{% endif %}>Merge duplicates</button>
     </form>
   </div>
