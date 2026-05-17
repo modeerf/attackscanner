@@ -40,7 +40,8 @@
       <select name="attacker_player_id">
         <option value="">All attackers</option>
         {% for player in player_filters %}
-        <option value="{{ player.player_id }}" {% if player.player_id == attacker_player_id %}selected{% endif %}>{{ player.player_name }}{% if player.attacker_alliance_tag %} [{{ player.attacker_alliance_tag }}]{% endif %}</option>
+        {% set player_value = player.player_id or player.player_name %}
+        <option value="{{ player_value }}" {% if player.player_id == attacker_player_id or player.player_name == attacker_name_filter %}selected{% endif %}>{{ player.player_name }}{% if player.attacker_alliance_tag %} [{{ player.attacker_alliance_tag }}]{% endif %}</option>
         {% else %}
         <option value="" disabled>No attackers found</option>
         {% endfor %}

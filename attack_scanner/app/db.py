@@ -566,13 +566,38 @@ def attacking_player_options(
     ).fetchall()
 
 
+def attacking_player_options_from_attacks(
+    conn: sqlite3.Connection,
+    attacker_alliance_tag: str | None = None,
+) -> list[sqlite3.Row]:
+    attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
+    return conn.execute(
+        """
+        SELECT MIN(attacker_player_id) AS player_id,
+               attacker_name AS player_name,
+               attacker_alliance_tag,
+               COUNT(*) AS attack_count
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND attacker_name IS NOT NULL AND attacker_name != ''
+          AND (? IS NULL OR attacker_alliance_tag = ?)
+        GROUP BY attacker_name, attacker_alliance_tag
+        ORDER BY attack_count DESC, attacker_name ASC
+        LIMIT 500
+        """,
+        (attacker_alliance_tag, attacker_alliance_tag),
+    ).fetchall()
+
+
 def attack_type_timeline(
     conn: sqlite3.Connection,
     server_id: int | None = None,
     attacker_alliance_tag: str | None = None,
     attacker_player_id: int | None = None,
+    attacker_name: str | None = None,
 ) -> list[sqlite3.Row]:
     attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
+    attacker_name = attacker_name.strip() if attacker_name else None
     return conn.execute(
         """
         SELECT date(COALESCE(occurred_at, created_at)) AS attack_day,
@@ -583,6 +608,7 @@ def attack_type_timeline(
           AND (? IS NULL OR server_id = ?)
           AND (? IS NULL OR attacker_alliance_tag = ?)
           AND (? IS NULL OR attacker_player_id = ?)
+          AND (? IS NULL OR attacker_name = ?)
         GROUP BY date(COALESCE(occurred_at, created_at)), attack_type
         ORDER BY date(COALESCE(occurred_at, created_at)) ASC, attack_type ASC
         """,
@@ -593,6 +619,8 @@ def attack_type_timeline(
             attacker_alliance_tag,
             attacker_player_id,
             attacker_player_id,
+            attacker_name,
+            attacker_name,
         ),
     ).fetchall()
 

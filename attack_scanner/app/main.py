@@ -27,6 +27,7 @@ from .db import (
     attack_type_timeline,
     attacking_alliance_options,
     attacking_player_options,
+    attacking_player_options_from_attacks,
     connect,
     delete_attack,
     deleted_attacks,
@@ -364,7 +365,9 @@ def stats_page(request: Request, server_id: str | None = None):
     server = _int_or_none(server_id)
     chart_server = _int_or_none(request.query_params.get("chart_server_id"))
     alliance_filter = _alliance_tag_or_none(request.query_params.get("attacker_alliance"))
-    attacker_player_id = _int_or_none(request.query_params.get("attacker_player_id"))
+    raw_attacker = request.query_params.get("attacker_player_id")
+    attacker_player_id = _int_or_none(raw_attacker)
+    attacker_name_filter = None if attacker_player_id is not None else (raw_attacker or "").strip() or None
     chart_error = None
     filter_error = None
     with connect() as conn:
@@ -408,6 +411,10 @@ def stats_page(request: Request, server_id: str | None = None):
                 for row in filter_attackers
                 if not alliance_filter or row["attacker_alliance_tag"] == alliance_filter
             ]
+        if not player_filters:
+            player_filters = attacking_player_options_from_attacks(conn, attacker_alliance_tag=alliance_filter)
+        if alliance_filter and not player_filters:
+            player_filters = attacking_player_options_from_attacks(conn)
 
         try:
             timeline_rows = attack_type_timeline(
@@ -415,6 +422,7 @@ def stats_page(request: Request, server_id: str | None = None):
                 server_id=chart_server,
                 attacker_alliance_tag=alliance_filter,
                 attacker_player_id=attacker_player_id,
+                attacker_name=attacker_name_filter,
             )
         except sqlite3.Error as exc:
             alliance_filters = []
@@ -430,6 +438,7 @@ def stats_page(request: Request, server_id: str | None = None):
             "chart_server_id": chart_server,
             "attacker_alliance": alliance_filter,
             "attacker_player_id": attacker_player_id,
+            "attacker_name_filter": attacker_name_filter,
             "attackers": attackers,
             "alliances": alliances,
             "attacked_alliances": attacked_alliances,
