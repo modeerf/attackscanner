@@ -13,6 +13,12 @@
   </form>
   {% else %}
   <p class="muted">Search, browse, and repair player and attack records.</p>
+  {% if data_counts %}
+  <div class="summary-grid compact-summary">
+    <div class="stat-box"><span>Players</span><strong>{{ data_counts.player_count }}</strong></div>
+    <div class="stat-box"><span>Attacks</span><strong>{{ data_counts.attack_count }}</strong><small>{{ data_counts.active_attack_count }} active · {{ data_counts.deleted_attack_count }} deleted</small></div>
+  </div>
+  {% endif %}
   <p><a href="/admin">Admin menu</a></p>
   {% endif %}
 </section>
@@ -47,7 +53,13 @@
             <td>{{ alliance_badge(player.current_alliance_tag, player.server_id) }}</td>
             <td>{{ player.server_id or '-' }}</td>
             <td>{{ player.total_events }}</td>
-            <td><a class="button-link compact-link" href="/admin/data/players/{{ player.id }}/edit">Edit</a></td>
+            <td>
+              {% if player.id %}
+              <a class="button-link compact-link" href="/admin/data/players/{{ player.id }}/edit">Edit</a>
+              {% else %}
+              <span class="muted">Attack-only</span>
+              {% endif %}
+            </td>
           </tr>
         {% else %}
           <tr><td colspan="6" class="muted">No players found.</td></tr>

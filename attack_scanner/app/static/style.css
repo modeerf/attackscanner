@@ -417,6 +417,10 @@ code {
   margin-top: 18px;
 }
 
+.compact-summary {
+  max-width: 520px;
+}
+
 .chart-heading {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.45fr);

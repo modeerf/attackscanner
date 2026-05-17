@@ -552,6 +552,79 @@ def search_players(conn: sqlite3.Connection, query: str = "", server_id: int | N
     ).fetchall()
 
 
+def admin_data_counts(conn: sqlite3.Connection) -> sqlite3.Row:
+    return conn.execute(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM players) AS player_count,
+            (SELECT COUNT(*) FROM attacks) AS attack_count,
+            (SELECT COUNT(*) FROM attacks WHERE deleted_at IS NULL) AS active_attack_count,
+            (SELECT COUNT(*) FROM attacks WHERE deleted_at IS NOT NULL) AS deleted_attack_count
+        """
+    ).fetchone()
+
+
+def admin_player_directory(conn: sqlite3.Connection, query: str = "", server_id: int | None = None) -> list[sqlite3.Row]:
+    query = query.strip()
+    like = f"%{query}%"
+    return conn.execute(
+        """
+        WITH participant_rows AS (
+            SELECT
+                p.id AS player_id,
+                COALESCE(p.name, a.attacker_name) AS name,
+                COALESCE(p.current_alliance_tag, a.attacker_alliance_tag) AS alliance_tag,
+                COALESCE(p.server_id, a.server_id) AS server_id,
+                a.id AS attack_id
+            FROM attacks a
+            LEFT JOIN players p ON p.id = a.attacker_player_id
+            WHERE a.attacker_name IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                p.id AS player_id,
+                COALESCE(p.name, a.defender_name) AS name,
+                COALESCE(p.current_alliance_tag, a.defender_alliance_tag) AS alliance_tag,
+                COALESCE(p.server_id, a.server_id) AS server_id,
+                a.id AS attack_id
+            FROM attacks a
+            LEFT JOIN players p ON p.id = a.defender_player_id
+            WHERE a.defender_name IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                p.id AS player_id,
+                p.name AS name,
+                p.current_alliance_tag AS alliance_tag,
+                p.server_id AS server_id,
+                NULL AS attack_id
+            FROM players p
+        )
+        SELECT
+            MIN(player_id) AS id,
+            name,
+            alliance_tag AS current_alliance_tag,
+            server_id,
+            COUNT(DISTINCT attack_id) AS total_events
+        FROM participant_rows
+        WHERE name IS NOT NULL
+          AND (? IS NULL OR server_id = ?)
+          AND (
+            ? = ''
+            OR name LIKE ?
+            OR alliance_tag LIKE ?
+            OR CAST(player_id AS TEXT) = ?
+          )
+        GROUP BY server_id, lower(trim(name)), COALESCE(alliance_tag, '')
+        ORDER BY total_events DESC, name ASC
+        LIMIT 200
+        """,
+        (server_id, server_id, query, like, like, query),
+    ).fetchall()
+
+
 def admin_search_attacks(
     conn: sqlite3.Connection,
     query: str = "",

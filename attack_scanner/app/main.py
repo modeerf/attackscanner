@@ -20,6 +20,8 @@ from .db import (
     add_attack,
     add_image_submission,
     add_managed_alliance,
+    admin_data_counts,
+    admin_player_directory,
     admin_search_attacks,
     alliance_matchups,
     alliance_members,
@@ -735,6 +737,7 @@ def data_management_page(
                 "authorized": False,
                 "password": "",
                 "duplicate_groups": [],
+                "data_counts": None,
                 "players": [],
                 "attacks": [],
                 "player_q": player_q,
@@ -746,7 +749,8 @@ def data_management_page(
         )
     with connect() as conn:
         duplicate_groups = duplicate_player_groups(conn)
-        players = search_players(conn, query=player_q, server_id=server)
+        data_counts = admin_data_counts(conn)
+        players = admin_player_directory(conn, query=player_q, server_id=server)
         attacks = admin_search_attacks(conn, query=attack_q, server_id=server)
     response = templates.TemplateResponse(
         request,
@@ -756,6 +760,7 @@ def data_management_page(
             "authorized": True,
             "password": "",
             "duplicate_groups": duplicate_groups,
+            "data_counts": data_counts,
             "players": players,
             "attacks": attacks,
             "player_q": player_q,
