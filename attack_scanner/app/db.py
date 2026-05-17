@@ -525,6 +525,78 @@ def top_attackers(conn: sqlite3.Connection, server_id: int | None = None, limit:
     ).fetchall()
 
 
+def attacking_alliance_options(conn: sqlite3.Connection, server_id: int | None = None) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT attacker_alliance_tag AS alliance_tag,
+               COUNT(*) AS attack_count
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND attacker_alliance_tag IS NOT NULL AND attacker_alliance_tag != ''
+          AND (? IS NULL OR server_id = ?)
+        GROUP BY attacker_alliance_tag
+        ORDER BY attack_count DESC, attacker_alliance_tag ASC
+        """,
+        (server_id, server_id),
+    ).fetchall()
+
+
+def attacking_player_options(
+    conn: sqlite3.Connection,
+    server_id: int | None = None,
+    attacker_alliance_tag: str | None = None,
+) -> list[sqlite3.Row]:
+    attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
+    return conn.execute(
+        """
+        SELECT attacker_player_id AS player_id,
+               attacker_name AS player_name,
+               attacker_alliance_tag,
+               server_id,
+               COUNT(*) AS attack_count
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND (? IS NULL OR server_id = ?)
+          AND (? IS NULL OR attacker_alliance_tag = ?)
+        GROUP BY attacker_player_id, attacker_name, attacker_alliance_tag, server_id
+        ORDER BY attack_count DESC, attacker_name ASC
+        LIMIT 200
+        """,
+        (server_id, server_id, attacker_alliance_tag, attacker_alliance_tag),
+    ).fetchall()
+
+
+def attack_type_timeline(
+    conn: sqlite3.Connection,
+    server_id: int | None = None,
+    attacker_alliance_tag: str | None = None,
+    attacker_player_id: int | None = None,
+) -> list[sqlite3.Row]:
+    attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
+    return conn.execute(
+        """
+        SELECT date(COALESCE(occurred_at, created_at)) AS day,
+               attack_type,
+               COUNT(*) AS attack_count
+        FROM attacks
+        WHERE deleted_at IS NULL
+          AND (? IS NULL OR server_id = ?)
+          AND (? IS NULL OR attacker_alliance_tag = ?)
+          AND (? IS NULL OR attacker_player_id = ?)
+        GROUP BY day, attack_type
+        ORDER BY day ASC, attack_type ASC
+        """,
+        (
+            server_id,
+            server_id,
+            attacker_alliance_tag,
+            attacker_alliance_tag,
+            attacker_player_id,
+            attacker_player_id,
+        ),
+    ).fetchall()
+
+
 def top_alliances(conn: sqlite3.Connection, server_id: int | None = None, limit: int = 10) -> list[sqlite3.Row]:
     return conn.execute(
         """

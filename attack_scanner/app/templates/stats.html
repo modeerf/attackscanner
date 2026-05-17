@@ -22,6 +22,37 @@
   </div>
 </section>
 
+<section class="card">
+  <div class="chart-heading">
+    <div>
+      <h3>Attack types over time</h3>
+      <p class="muted">Daily attack volume by type, filtered by attacking alliance or attacking player.</p>
+    </div>
+    <form class="chart-filter-form" method="get" action="/stats">
+      <input type="number" name="server_id" value="{{ server_id or '' }}" placeholder="Server ID">
+      <select name="attacker_alliance">
+        <option value="">All alliances</option>
+        {% for alliance in alliance_filters %}
+        <option value="{{ alliance.alliance_tag }}" {% if alliance.alliance_tag == attacker_alliance %}selected{% endif %}>[{{ alliance.alliance_tag }}] {{ alliance.attack_count }}</option>
+        {% endfor %}
+      </select>
+      <select name="attacker_player_id">
+        <option value="">All attackers</option>
+        {% for player in player_filters %}
+        <option value="{{ player.player_id }}" {% if player.player_id == attacker_player_id %}selected{% endif %}>{{ player.player_name }}{% if player.attacker_alliance_tag %} [{{ player.attacker_alliance_tag }}]{% endif %}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Apply</button>
+      <a class="button-link" href="/stats{% if server_id %}?server_id={{ server_id }}{% endif %}">Reset</a>
+    </form>
+  </div>
+  <div class="chart-panel">
+    <div id="attack-type-chart" class="timeline-chart" aria-live="polite"></div>
+  </div>
+  <script id="attack-type-data" type="application/json">{{ timeline_data|tojson }}</script>
+  <script src="/static/stats_charts.js?v=20260517" defer></script>
+</section>
+
 <section class="grid two">
   <div class="card">
     <h3>Top 10 attackers</h3>

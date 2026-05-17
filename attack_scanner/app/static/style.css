@@ -417,6 +417,131 @@ code {
   margin-top: 18px;
 }
 
+.chart-heading {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.45fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.chart-heading h3 {
+  margin-bottom: 6px;
+}
+
+.chart-heading p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.chart-filter-form {
+  display: grid;
+  grid-template-columns: 110px minmax(130px, 1fr) minmax(170px, 1.3fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 13px;
+  border: 1px solid rgba(112, 103, 68, .58);
+  border-radius: 5px;
+  color: var(--muted);
+  background: rgba(8, 9, 7, .28);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.button-link:hover {
+  color: var(--text);
+  border-color: rgba(158, 198, 93, .45);
+  background: rgba(158, 198, 93, .10);
+  text-decoration: none;
+}
+
+.chart-panel {
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(112, 103, 68, .45);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(8, 9, 7, .26), rgba(8, 9, 7, .46)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .025) 0 1px, transparent 1px 70px);
+}
+
+.timeline-chart {
+  min-height: 310px;
+  padding: 12px 14px 14px;
+}
+
+.timeline-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-grid-line {
+  stroke: rgba(238, 232, 214, .10);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  stroke: rgba(238, 232, 214, .18);
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-line {
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 7px rgba(0, 0, 0, .45));
+}
+
+.chart-dot {
+  stroke: #10120d;
+  stroke-width: 2;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 18px 14px 54px;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chart-legend i {
+  display: inline-block;
+  width: 22px;
+  height: 4px;
+  border-radius: 999px;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.chart-empty {
+  margin: 0;
+  padding: 48px 18px;
+  text-align: center;
+}
+
 .stat-box {
   min-height: 104px;
   padding: 14px;
@@ -606,6 +731,8 @@ button:hover {
 @media (max-width: 860px) {
   .grid.two,
   .search-form,
+  .chart-heading,
+  .chart-filter-form,
   .summary-grid,
   .detail-grid,
   .upload-grid,
@@ -616,6 +743,10 @@ button:hover {
   .nav-row {
     grid-template-columns: 1fr auto;
     gap: 10px 12px;
+  }
+
+  .chart-filter-form {
+    grid-template-columns: 1fr;
   }
 
   .nav-tools {

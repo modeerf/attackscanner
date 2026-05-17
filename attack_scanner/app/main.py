@@ -23,6 +23,9 @@ from .db import (
     alliance_members,
     alliance_opponents,
     alliance_overview,
+    attack_type_timeline,
+    attacking_alliance_options,
+    attacking_player_options,
     connect,
     delete_attack,
     deleted_attacks,
@@ -358,21 +361,36 @@ def player_detail(request: Request, player_id: int):
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request, server_id: str | None = None):
     server = _int_or_none(server_id)
+    alliance_filter = _alliance_tag_or_none(request.query_params.get("attacker_alliance"))
+    attacker_player_id = _int_or_none(request.query_params.get("attacker_player_id"))
     with connect() as conn:
         attackers = top_attackers(conn, server_id=server, limit=10)
         alliances = top_alliances(conn, server_id=server, limit=10)
         attacked_alliances = top_attacked_alliances(conn, server_id=server, limit=10)
         matchups = alliance_matchups(conn, server_id=server, limit=15)
+        alliance_filters = attacking_alliance_options(conn, server_id=server)
+        player_filters = attacking_player_options(conn, server_id=server, attacker_alliance_tag=alliance_filter)
+        timeline_rows = attack_type_timeline(
+            conn,
+            server_id=server,
+            attacker_alliance_tag=alliance_filter,
+            attacker_player_id=attacker_player_id,
+        )
     return templates.TemplateResponse(
         request,
         "stats.html",
         {
             "request": request,
             "server_id": server,
+            "attacker_alliance": alliance_filter,
+            "attacker_player_id": attacker_player_id,
             "attackers": attackers,
             "alliances": alliances,
             "attacked_alliances": attacked_alliances,
             "matchups": matchups,
+            "alliance_filters": alliance_filters,
+            "player_filters": player_filters,
+            "timeline_data": [dict(row) for row in timeline_rows],
             "top_alliance": alliances[0] if alliances else None,
             "most_attacked_alliance": attacked_alliances[0] if attacked_alliances else None,
         },
