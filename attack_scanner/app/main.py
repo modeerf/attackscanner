@@ -363,7 +363,29 @@ def player_detail(request: Request, player_id: int):
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request, server_id: str | None = None):
     server = _int_or_none(server_id)
-    chart_server = _int_or_none(request.query_params.get("chart_server_id"))
+    with connect() as conn:
+        attackers = top_attackers(conn, server_id=server, limit=10)
+        alliances = top_alliances(conn, server_id=server, limit=10)
+        attacked_alliances = top_attacked_alliances(conn, server_id=server, limit=10)
+        matchups = alliance_matchups(conn, server_id=server, limit=15)
+    return templates.TemplateResponse(
+        request,
+        "stats.html",
+        {
+            "request": request,
+            "server_id": server,
+            "attackers": attackers,
+            "alliances": alliances,
+            "attacked_alliances": attacked_alliances,
+            "matchups": matchups,
+            "top_alliance": alliances[0] if alliances else None,
+            "most_attacked_alliance": attacked_alliances[0] if attacked_alliances else None,
+        },
+    )
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+def analytics_page(request: Request):
     alliance_filter = _alliance_tag_or_none(request.query_params.get("attacker_alliance"))
     raw_attacker = request.query_params.get("attacker_player_id")
     attacker_player_id = _int_or_none(raw_attacker)
@@ -371,16 +393,9 @@ def stats_page(request: Request, server_id: str | None = None):
     chart_error = None
     filter_error = None
     with connect() as conn:
-        attackers = top_attackers(conn, server_id=server, limit=10)
-        alliances = top_alliances(conn, server_id=server, limit=10)
-        attacked_alliances = top_attacked_alliances(conn, server_id=server, limit=10)
-        matchups = alliance_matchups(conn, server_id=server, limit=15)
         filter_alliances = top_alliances(conn, limit=500)
         filter_attackers = top_attackers(conn, limit=500)
         try:
-            # Keep filter menus populated from all active data. The selected filters still
-            # constrain the chart query, but the menu choices should not disappear just
-            # because the current server filter is narrow or older rows have no server_id.
             alliance_filters = attacking_alliance_options(conn)
             player_filters = attacking_player_options(conn, attacker_alliance_tag=alliance_filter)
             if alliance_filter and not player_filters:
@@ -419,30 +434,22 @@ def stats_page(request: Request, server_id: str | None = None):
         try:
             timeline_rows = attack_type_timeline(
                 conn,
-                server_id=chart_server,
                 attacker_alliance_tag=alliance_filter,
                 attacker_player_id=attacker_player_id,
                 attacker_name=attacker_name_filter,
             )
         except sqlite3.Error as exc:
-            alliance_filters = []
-            player_filters = []
             timeline_rows = []
             chart_error = str(exc)
+
     return templates.TemplateResponse(
         request,
-        "stats.html",
+        "analytics.html",
         {
             "request": request,
-            "server_id": server,
-            "chart_server_id": chart_server,
             "attacker_alliance": alliance_filter,
             "attacker_player_id": attacker_player_id,
             "attacker_name_filter": attacker_name_filter,
-            "attackers": attackers,
-            "alliances": alliances,
-            "attacked_alliances": attacked_alliances,
-            "matchups": matchups,
             "alliance_filters": [dict(row) for row in alliance_filters],
             "player_filters": [dict(row) for row in player_filters],
             "timeline_json": json.dumps(
@@ -457,8 +464,6 @@ def stats_page(request: Request, server_id: str | None = None):
             ),
             "chart_error": chart_error,
             "filter_error": filter_error,
-            "top_alliance": alliances[0] if alliances else None,
-            "most_attacked_alliance": attacked_alliances[0] if attacked_alliances else None,
         },
     )
 

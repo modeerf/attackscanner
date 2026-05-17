@@ -22,43 +22,6 @@
   </div>
 </section>
 
-<section class="card">
-  <div class="chart-heading">
-    <div>
-      <h3>Attack types over time</h3>
-      <p class="muted">Daily attack volume by type, filtered by attacking alliance or attacking player.</p>
-    </div>
-    <form class="chart-filter-form" method="get" action="/stats">
-      <select name="attacker_alliance">
-        <option value="">All alliances</option>
-        {% for alliance in alliance_filters %}
-        <option value="{{ alliance.alliance_tag }}" {% if alliance.alliance_tag == attacker_alliance %}selected{% endif %}>[{{ alliance.alliance_tag }}] {{ alliance.attack_count }}</option>
-        {% else %}
-        <option value="" disabled>No attacking alliances found</option>
-        {% endfor %}
-      </select>
-      <select name="attacker_player_id">
-        <option value="">All attackers</option>
-        {% for player in player_filters %}
-        {% set player_value = player.player_id or player.player_name %}
-        <option value="{{ player_value }}" {% if player.player_id == attacker_player_id or player.player_name == attacker_name_filter %}selected{% endif %}>{{ player.player_name }}{% if player.attacker_alliance_tag %} [{{ player.attacker_alliance_tag }}]{% endif %}</option>
-        {% else %}
-        <option value="" disabled>No attackers found</option>
-        {% endfor %}
-      </select>
-      <button type="submit">Apply</button>
-      <a class="button-link" href="/stats">Reset</a>
-    </form>
-  </div>
-  {% if filter_error %}<p class="muted chart-error">Filter menus used fallback data: {{ filter_error }}</p>{% endif %}
-  <div class="chart-panel">
-    <div id="attack-type-chart" class="timeline-chart" aria-live="polite"></div>
-  </div>
-  {% if chart_error %}<p class="muted chart-error">Chart data is temporarily unavailable: {{ chart_error }}</p>{% endif %}
-  <script id="attack-type-data" type="application/json">{{ timeline_json|safe }}</script>
-  <script src="/static/stats_charts.js?v=20260517" defer></script>
-</section>
-
 <section class="grid two">
   <div class="card">
     <h3>Top 10 attackers</h3>
