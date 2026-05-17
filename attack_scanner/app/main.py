@@ -41,6 +41,7 @@ from .db import (
     init_db,
     is_managed_alliance,
     managed_alliance_tags,
+    merge_player_ids,
     merge_duplicate_players,
     player_history,
     recent_attacks,
@@ -783,6 +784,24 @@ def merge_duplicate_players_route(request: Request, password: str = Form("")):
         groups = merge_duplicate_players(conn, apply=True)
     merged_count = sum(len(group["duplicate_ids"]) for group in groups)
     return _authorized_admin_redirect("/admin/data", msg=f"Merged {merged_count} duplicate player row(s).")
+
+
+@app.post("/admin/data/merge-player-group")
+def merge_player_group_route(
+    request: Request,
+    password: str = Form(""),
+    canonical_id: int = Form(...),
+    duplicate_ids: str = Form(""),
+):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Password is incorrect.")
+    try:
+        ids = [int(value.strip()) for value in duplicate_ids.split(",") if value.strip()]
+        with connect() as conn:
+            merge_player_ids(conn, canonical_id, ids)
+    except ValueError as exc:
+        return _authorized_admin_redirect("/admin/data", error=str(exc))
+    return _authorized_admin_redirect("/admin/data", msg=f"Merged {len(ids)} duplicate player row(s).")
 
 
 @app.get("/admin/data/players/{player_id:int}/edit", response_class=HTMLResponse)

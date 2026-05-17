@@ -114,9 +114,9 @@
   <div class="chart-heading">
     <div>
       <h3>Duplicate players</h3>
-      <p class="muted">Duplicates are exact matches on server and normalized player name.</p>
+      <p class="muted">Duplicates are exact matches on normalized player name and alliance. Server is ignored because player names are treated as global.</p>
     </div>
-    <form method="post" action="/admin/data/merge-duplicate-players" onsubmit="return confirm('Merge all exact duplicate player rows?');">
+    <form method="post" action="/admin/data/merge-duplicate-players" onsubmit="return confirm('Merge all duplicate player rows by name and alliance across all servers?');">
       <button type="submit" {% if not duplicate_groups %}disabled{% endif %}>Merge duplicates</button>
     </form>
   </div>
@@ -124,26 +124,36 @@
     <table>
       <thead>
         <tr>
-          <th>Server</th>
+          <th>Servers</th>
           <th>Name</th>
+          <th>Alliance</th>
           <th>Canonical ID</th>
           <th>Duplicate IDs</th>
           <th>Players</th>
           <th>Attack refs</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
       {% for group in duplicate_groups %}
         <tr>
-          <td>{{ group.server_id or '-' }}</td>
+          <td>{{ group.servers|join(', ') if group.servers else '-' }}</td>
           <td>{{ group.canonical_name }}</td>
+          <td>{{ alliance_badge(group.alliance_tag) if group.alliance_tag else '-' }}</td>
           <td>{{ group.canonical_id }}</td>
           <td>{{ group.duplicate_ids|join(', ') }}</td>
           <td>{{ group.player_count }}</td>
           <td>{{ group.attack_refs }}</td>
+          <td>
+            <form method="post" action="/admin/data/merge-player-group" onsubmit="return confirm('Merge this duplicate player group?');">
+              <input type="hidden" name="canonical_id" value="{{ group.canonical_id }}">
+              <input type="hidden" name="duplicate_ids" value="{{ group.duplicate_ids|join(',') }}">
+              <button class="compact-link" type="submit">Merge</button>
+            </form>
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="muted">No exact duplicate player rows found.</td></tr>
+        <tr><td colspan="8" class="muted">No duplicate player rows found by name and alliance.</td></tr>
       {% endfor %}
       </tbody>
     </table>

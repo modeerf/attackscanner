@@ -175,6 +175,19 @@ def get_or_create_player(conn: sqlite3.Connection, name: str, server_id: int | N
     alliance_tag = normalize_alliance_tag(alliance_tag)
     normalized = normalize_name(name)
     row = conn.execute(
+        """
+        SELECT *
+        FROM players
+        WHERE normalized_name = ?
+          AND COALESCE(current_alliance_tag, '') = COALESCE(?, '')
+        ORDER BY CASE WHEN server_id IS ? THEN 0 ELSE 1 END, id ASC
+        LIMIT 1
+        """,
+        (normalized, alliance_tag, server_id),
+    ).fetchone()
+    if row:
+        return row
+    row = conn.execute(
         "SELECT * FROM players WHERE server_id IS ? AND normalized_name = ?",
         (server_id, normalized),
     ).fetchone()
@@ -431,15 +444,15 @@ def repair_j_prefixed_attackers(conn: sqlite3.Connection, apply: bool = False) -
 def duplicate_player_groups(conn: sqlite3.Connection) -> list[dict]:
     groups = conn.execute(
         """
-        SELECT server_id,
-               normalized_name,
+        SELECT normalized_name,
+               COALESCE(current_alliance_tag, '') AS alliance_key,
                COUNT(*) AS player_count,
                GROUP_CONCAT(id) AS player_ids,
                MIN(id) AS canonical_id
         FROM players
-        GROUP BY server_id, normalized_name
+        GROUP BY normalized_name, COALESCE(current_alliance_tag, '')
         HAVING COUNT(*) > 1
-        ORDER BY player_count DESC, normalized_name ASC
+        ORDER BY player_count DESC, normalized_name ASC, alliance_key ASC
         """
     ).fetchall()
     results: list[dict] = []
@@ -450,16 +463,19 @@ def duplicate_player_groups(conn: sqlite3.Connection) -> list[dict]:
                    (SELECT COUNT(*) FROM attacks a WHERE a.attacker_player_id = p.id) AS attacker_refs,
                    (SELECT COUNT(*) FROM attacks a WHERE a.defender_player_id = p.id) AS defender_refs
             FROM players p
-            WHERE p.server_id IS ? AND p.normalized_name = ?
+            WHERE p.normalized_name = ?
+              AND COALESCE(p.current_alliance_tag, '') = ?
             ORDER BY (attacker_refs + defender_refs) DESC, p.id ASC
             """,
-            (group["server_id"], group["normalized_name"]),
+            (group["normalized_name"], group["alliance_key"]),
         ).fetchall()
         canonical = players[0]
         duplicate_ids = [row["id"] for row in players if row["id"] != canonical["id"]]
+        servers = sorted({row["server_id"] for row in players if row["server_id"] is not None})
         results.append(
             {
-                "server_id": group["server_id"],
+                "alliance_tag": group["alliance_key"] or None,
+                "servers": servers,
                 "normalized_name": group["normalized_name"],
                 "canonical_id": canonical["id"],
                 "canonical_name": canonical["name"],
@@ -471,45 +487,67 @@ def duplicate_player_groups(conn: sqlite3.Connection) -> list[dict]:
     return results
 
 
+def merge_player_ids(conn: sqlite3.Connection, canonical_id: int, duplicate_ids: list[int]) -> None:
+    duplicate_ids = [int(player_id) for player_id in duplicate_ids if int(player_id) != int(canonical_id)]
+    if not duplicate_ids:
+        return
+    canonical = conn.execute("SELECT * FROM players WHERE id = ?", (canonical_id,)).fetchone()
+    if not canonical:
+        raise ValueError("Canonical player not found.")
+    placeholders = ", ".join("?" for _ in duplicate_ids)
+    existing_duplicates = conn.execute(
+        f"SELECT id FROM players WHERE id IN ({placeholders})",
+        duplicate_ids,
+    ).fetchall()
+    if len(existing_duplicates) != len(set(duplicate_ids)):
+        raise ValueError("One or more duplicate players were not found.")
+
+    conn.execute(
+        f"""
+        UPDATE attacks
+        SET attacker_player_id = ?,
+            attacker_name = ?,
+            attacker_alliance_tag = ?
+        WHERE attacker_player_id IN ({placeholders})
+        """,
+        (canonical_id, canonical["name"], canonical["current_alliance_tag"], *duplicate_ids),
+    )
+    conn.execute(
+        f"""
+        UPDATE attacks
+        SET defender_player_id = ?,
+            defender_name = ?,
+            defender_alliance_tag = ?
+        WHERE defender_player_id IN ({placeholders})
+        """,
+        (canonical_id, canonical["name"], canonical["current_alliance_tag"], *duplicate_ids),
+    )
+    conn.execute(
+        """
+        UPDATE attacks
+        SET attacker_name = ?, attacker_alliance_tag = ?
+        WHERE attacker_player_id = ?
+        """,
+        (canonical["name"], canonical["current_alliance_tag"], canonical_id),
+    )
+    conn.execute(
+        """
+        UPDATE attacks
+        SET defender_name = ?, defender_alliance_tag = ?
+        WHERE defender_player_id = ?
+        """,
+        (canonical["name"], canonical["current_alliance_tag"], canonical_id),
+    )
+    conn.execute(f"DELETE FROM players WHERE id IN ({placeholders})", duplicate_ids)
+
+
 def merge_duplicate_players(conn: sqlite3.Connection, apply: bool = False) -> list[dict]:
     groups = duplicate_player_groups(conn)
     if not apply:
         return groups
 
     for group in groups:
-        duplicate_ids = group["duplicate_ids"]
-        if not duplicate_ids:
-            continue
-        placeholders = ", ".join("?" for _ in duplicate_ids)
-        canonical_id = group["canonical_id"]
-        conn.execute(
-            f"UPDATE attacks SET attacker_player_id = ? WHERE attacker_player_id IN ({placeholders})",
-            (canonical_id, *duplicate_ids),
-        )
-        conn.execute(
-            f"UPDATE attacks SET defender_player_id = ? WHERE defender_player_id IN ({placeholders})",
-            (canonical_id, *duplicate_ids),
-        )
-        canonical = conn.execute("SELECT * FROM players WHERE id = ?", (canonical_id,)).fetchone()
-        if canonical and not canonical["current_alliance_tag"]:
-            alliance = conn.execute(
-                f"""
-                SELECT current_alliance_tag
-                FROM players
-                WHERE id IN ({placeholders})
-                  AND current_alliance_tag IS NOT NULL
-                  AND current_alliance_tag != ''
-                ORDER BY id ASC
-                LIMIT 1
-                """,
-                duplicate_ids,
-            ).fetchone()
-            if alliance:
-                conn.execute(
-                    "UPDATE players SET current_alliance_tag = ? WHERE id = ?",
-                    (alliance["current_alliance_tag"], canonical_id),
-                )
-        conn.execute(f"DELETE FROM players WHERE id IN ({placeholders})", duplicate_ids)
+        merge_player_ids(conn, group["canonical_id"], group["duplicate_ids"])
 
     return groups
 
