@@ -121,10 +121,10 @@ a.alliance-tag:hover {
 
 .nav-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
-  padding: 12px 0;
+  gap: 10px 18px;
+  padding: 12px 0 10px;
 }
 
 .nav-row h1 {
@@ -170,6 +170,7 @@ a.alliance-tag:hover {
 }
 
 .primary-nav {
+  grid-column: 1 / -1;
   justify-self: center;
   padding: 4px;
   border: 1px solid rgba(112, 103, 68, .48);
@@ -179,8 +180,14 @@ a.alliance-tag:hover {
 }
 
 .utility-nav {
+  display: flex;
   padding: 0;
   border: 0;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(112, 103, 68, .30);
+  border-radius: 8px;
+  background: rgba(8, 9, 7, .16);
 }
 
 .nav-row nav a {
@@ -224,6 +231,7 @@ a.alliance-tag:hover {
   width: 86px;
   min-height: 32px;
   padding: 7px 8px;
+  border-radius: 8px;
   font-size: .74rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -611,24 +619,25 @@ button:hover {
   }
 
   .nav-tools {
-    grid-column: 1 / -1;
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    grid-column: auto;
+    width: auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
   }
 
   .primary-nav {
-    order: 2;
+    grid-column: 1 / -1;
+    order: 0;
     width: 100%;
     justify-content: center;
   }
 
   .utility-nav {
-    order: 1;
+    order: 0;
   }
 
   .language-switcher {
-    order: 1;
+    order: 0;
     width: auto;
   }
 }
@@ -639,6 +648,8 @@ button:hover {
   }
 
   .nav-tools {
+    width: 100%;
+    justify-content: space-between;
     align-items: stretch;
   }
 

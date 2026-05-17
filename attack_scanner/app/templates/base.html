@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Last Assylum: Plague Violation Tracker{% endblock %}</title>
+  <link rel="icon" href="/static/images/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css?v=plague-20260425">
   <script src="/static/i18n.js?v=20260517" defer></script>
 </head>
@@ -12,12 +13,6 @@
   <div class="wrap nav-row">
     <h1><a href="/">Last Assylum: Plague Violation Tracker</a></h1>
     <div class="nav-tools">
-      <nav class="primary-nav">
-        <a href="/">Dashboard</a>
-        <a href="/players">Players</a>
-        <a href="/stats">Stats</a>
-        <a href="/alliances">Alliances</a>
-      </nav>
       <nav class="utility-nav" aria-label="Utilities">
         <a href="/attacks/new">Add</a>
         <a href="/manual">Docs</a>
@@ -34,6 +29,12 @@
         </select>
       </label>
     </div>
+    <nav class="primary-nav">
+      <a href="/">Dashboard</a>
+      <a href="/players">Players</a>
+      <a href="/stats">Stats</a>
+      <a href="/alliances">Alliances</a>
+    </nav>
   </div>
 </header>
 <main class="wrap">
