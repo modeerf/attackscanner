@@ -148,12 +148,62 @@
             <form method="post" action="/admin/data/merge-player-group" onsubmit="return confirm('Merge this duplicate player group?');">
               <input type="hidden" name="canonical_id" value="{{ group.canonical_id }}">
               <input type="hidden" name="duplicate_ids" value="{{ group.duplicate_ids|join(',') }}">
+              <input type="hidden" name="canonical_name" value="{{ group.canonical_name }}">
               <button class="compact-link" type="submit">Merge</button>
             </form>
           </td>
         </tr>
       {% else %}
         <tr><td colspan="8" class="muted">No duplicate player rows found by name and alliance.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <div class="chart-heading">
+    <div>
+      <h3>Potential parser-name matches</h3>
+      <p class="muted">These rows match when the first character of the normalized player name is ignored, with alliance still matching. Review before merging.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Servers</th>
+          <th>Names</th>
+          <th>Alliance</th>
+          <th>Canonical ID</th>
+          <th>Merge IDs</th>
+          <th>Players</th>
+          <th>Attack refs</th>
+          <th>Correct name</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for group in potential_merge_groups %}
+        <tr>
+          <td>{{ group.servers|join(', ') if group.servers else '-' }}</td>
+          <td>{{ group.names|join(', ') }}</td>
+          <td>{{ alliance_badge(group.alliance_tag) if group.alliance_tag else '-' }}</td>
+          <td>{{ group.canonical_id }}</td>
+          <td>{{ group.duplicate_ids|join(', ') }}</td>
+          <td>{{ group.player_count }}</td>
+          <td>{{ group.attack_refs }}</td>
+          <td colspan="2">
+            <form class="inline-merge-form" method="post" action="/admin/data/merge-player-group" onsubmit="return confirm('Merge these potential parser-name matches?');">
+              <input type="hidden" name="canonical_id" value="{{ group.canonical_id }}">
+              <input type="hidden" name="duplicate_ids" value="{{ group.duplicate_ids|join(',') }}">
+              <input type="text" name="canonical_name" value="{{ group.canonical_name }}" aria-label="Correct player name" required>
+              <button class="compact-link" type="submit">Merge</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="muted">No first-character parser-name candidates found.</td></tr>
       {% endfor %}
       </tbody>
     </table>

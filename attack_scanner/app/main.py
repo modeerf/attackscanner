@@ -44,6 +44,7 @@ from .db import (
     merge_player_ids,
     merge_duplicate_players,
     player_history,
+    potential_player_merge_groups,
     recent_attacks,
     recent_attacks_for_alliance,
     remove_managed_alliance,
@@ -738,6 +739,7 @@ def data_management_page(
                 "authorized": False,
                 "password": "",
                 "duplicate_groups": [],
+                "potential_merge_groups": [],
                 "data_counts": None,
                 "players": [],
                 "attacks": [],
@@ -750,6 +752,7 @@ def data_management_page(
         )
     with connect() as conn:
         duplicate_groups = duplicate_player_groups(conn)
+        potential_merge_groups = potential_player_merge_groups(conn)
         data_counts = admin_data_counts(conn)
         players = admin_player_directory(conn, query=player_q, server_id=server)
         attacks = admin_search_attacks(conn, query=attack_q, server_id=server)
@@ -761,6 +764,7 @@ def data_management_page(
             "authorized": True,
             "password": "",
             "duplicate_groups": duplicate_groups,
+            "potential_merge_groups": potential_merge_groups,
             "data_counts": data_counts,
             "players": players,
             "attacks": attacks,
@@ -792,13 +796,19 @@ def merge_player_group_route(
     password: str = Form(""),
     canonical_id: int = Form(...),
     duplicate_ids: str = Form(""),
+    canonical_name: str = Form(""),
 ):
     if not _is_admin_authorized(request, password):
         return _admin_redirect("/admin", error="Password is incorrect.")
     try:
         ids = [int(value.strip()) for value in duplicate_ids.split(",") if value.strip()]
         with connect() as conn:
-            merge_player_ids(conn, canonical_id, ids)
+            merge_player_ids(conn, canonical_id, ids, canonical_name=canonical_name or None)
+    except sqlite3.IntegrityError:
+        return _authorized_admin_redirect(
+            "/admin/data",
+            error="That corrected player name conflicts with an existing player. Include that row in the merge or choose another canonical record.",
+        )
     except ValueError as exc:
         return _authorized_admin_redirect("/admin/data", error=str(exc))
     return _authorized_admin_redirect("/admin/data", msg=f"Merged {len(ids)} duplicate player row(s).")

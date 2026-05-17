@@ -472,6 +472,14 @@ code {
   max-height: 520px;
 }
 
+.inline-merge-form {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 260px;
+}
+
 .button-link {
   display: inline-flex;
   align-items: center;
@@ -799,6 +807,7 @@ button:hover {
   .search-form,
   .admin-filter-form,
   .admin-edit-form,
+  .inline-merge-form,
   .chart-heading,
   .chart-filter-form,
   .summary-grid,
