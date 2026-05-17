@@ -29,7 +29,6 @@
       <p class="muted">Daily attack volume by type, filtered by attacking alliance or attacking player.</p>
     </div>
     <form class="chart-filter-form" method="get" action="/stats">
-      <input type="number" name="server_id" value="{{ server_id or '' }}" placeholder="Server ID">
       <select name="attacker_alliance">
         <option value="">All alliances</option>
         {% for alliance in alliance_filters %}
@@ -47,7 +46,7 @@
         {% endfor %}
       </select>
       <button type="submit">Apply</button>
-      <a class="button-link" href="/stats{% if server_id %}?server_id={{ server_id }}{% endif %}">Reset</a>
+      <a class="button-link" href="/stats">Reset</a>
     </form>
   </div>
   {% if filter_error %}<p class="muted chart-error">Filter menus used fallback data: {{ filter_error }}</p>{% endif %}

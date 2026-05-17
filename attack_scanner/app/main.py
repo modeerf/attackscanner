@@ -362,6 +362,7 @@ def player_detail(request: Request, player_id: int):
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request, server_id: str | None = None):
     server = _int_or_none(server_id)
+    chart_server = _int_or_none(request.query_params.get("chart_server_id"))
     alliance_filter = _alliance_tag_or_none(request.query_params.get("attacker_alliance"))
     attacker_player_id = _int_or_none(request.query_params.get("attacker_player_id"))
     chart_error = None
@@ -411,7 +412,7 @@ def stats_page(request: Request, server_id: str | None = None):
         try:
             timeline_rows = attack_type_timeline(
                 conn,
-                server_id=server,
+                server_id=chart_server,
                 attacker_alliance_tag=alliance_filter,
                 attacker_player_id=attacker_player_id,
             )
@@ -426,6 +427,7 @@ def stats_page(request: Request, server_id: str | None = None):
         {
             "request": request,
             "server_id": server,
+            "chart_server_id": chart_server,
             "attacker_alliance": alliance_filter,
             "attacker_player_id": attacker_player_id,
             "attackers": attackers,

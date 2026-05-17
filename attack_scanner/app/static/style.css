@@ -435,7 +435,7 @@ code {
 
 .chart-filter-form {
   display: grid;
-  grid-template-columns: 110px minmax(130px, 1fr) minmax(170px, 1.3fr) auto auto;
+  grid-template-columns: minmax(150px, 1fr) minmax(190px, 1.4fr) auto auto;
   gap: 10px;
   align-items: end;
 }
