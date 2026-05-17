@@ -12,12 +12,92 @@
     <button type="submit">Unlock</button>
   </form>
   {% else %}
-  <p class="muted">Review and repair exact duplicate player rows. This rewires attack history to one canonical player record before deleting duplicate player rows.</p>
+  <p class="muted">Search, browse, and repair player and attack records.</p>
   <p><a href="/admin">Admin menu</a></p>
   {% endif %}
 </section>
 
 {% if authorized %}
+<section class="grid two">
+  <article class="card">
+    <h3>Players</h3>
+    <form class="admin-filter-form" method="get" action="/admin/data">
+      <label>Search players<input type="search" name="player_q" value="{{ player_q }}" placeholder="Name"></label>
+      <label>Server<input type="number" name="server_id" value="{{ server_id }}" placeholder="Any"></label>
+      <input type="hidden" name="attack_q" value="{{ attack_q }}">
+      <button type="submit">Search</button>
+    </form>
+    <div class="table-wrap admin-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Alliance</th>
+            <th>Server</th>
+            <th>Events</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for player in players %}
+          <tr>
+            <td>{{ player.id }}</td>
+            <td><a href="/players/{{ player.id }}">{{ player.name }}</a></td>
+            <td>{{ alliance_badge(player.current_alliance_tag, player.server_id) }}</td>
+            <td>{{ player.server_id or '-' }}</td>
+            <td>{{ player.total_events }}</td>
+            <td><a class="button-link compact-link" href="/admin/data/players/{{ player.id }}/edit">Edit</a></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">No players found.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card">
+    <h3>Attacks</h3>
+    <form class="admin-filter-form" method="get" action="/admin/data">
+      <label>Search attacks<input type="search" name="attack_q" value="{{ attack_q }}" placeholder="ID, type, player, alliance"></label>
+      <label>Server<input type="number" name="server_id" value="{{ server_id }}" placeholder="Any"></label>
+      <input type="hidden" name="player_q" value="{{ player_q }}">
+      <button type="submit">Search</button>
+    </form>
+    <div class="table-wrap admin-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Type</th>
+            <th>Attacker</th>
+            <th>Defender</th>
+            <th>When</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for attack in attacks %}
+          <tr>
+            <td>{{ attack.id }}</td>
+            <td>{{ attack.attack_type }}</td>
+            <td>{{ alliance_badge(attack.attacker_alliance_tag, attack.server_id) }} {{ attack.attacker_name }}</td>
+            <td>{% if attack.defender_name %}{{ alliance_badge(attack.defender_alliance_tag, attack.server_id) }} {{ attack.defender_name }}{% else %}-{% endif %}</td>
+            <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
+            <td>{% if attack.deleted_at %}<span class="status-pill deleted">Deleted</span>{% else %}<span class="status-pill active">Active</span>{% endif %}</td>
+            <td><a class="button-link compact-link" href="/admin/data/attacks/{{ attack.id }}/edit">Edit</a></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="muted">No attacks found.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+
 <section class="card">
   <div class="chart-heading">
     <div>

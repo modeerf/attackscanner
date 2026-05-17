@@ -20,6 +20,7 @@ from .db import (
     add_attack,
     add_image_submission,
     add_managed_alliance,
+    admin_search_attacks,
     alliance_matchups,
     alliance_members,
     alliance_opponents,
@@ -48,6 +49,8 @@ from .db import (
     top_alliances,
     top_attackers,
     top_attacked_alliances,
+    update_attack_record,
+    update_player_record,
 )
 from .parsers import ParseError, parse_battle_report, parse_caravan_report, parse_ops_report, _normalize_datetime_value
 
@@ -713,7 +716,16 @@ def remove_server78_alliance(request: Request, password: str = Form(""), allianc
 
 
 @app.get("/admin/data", response_class=HTMLResponse)
-def data_management_page(request: Request, password: str | None = None, msg: str | None = None, error: str | None = None):
+def data_management_page(
+    request: Request,
+    password: str | None = None,
+    msg: str | None = None,
+    error: str | None = None,
+    player_q: str = "",
+    attack_q: str = "",
+    server_id: str | None = None,
+):
+    server = _int_or_none(server_id)
     if not _is_admin_authorized(request, password):
         return templates.TemplateResponse(
             request,
@@ -723,12 +735,19 @@ def data_management_page(request: Request, password: str | None = None, msg: str
                 "authorized": False,
                 "password": "",
                 "duplicate_groups": [],
+                "players": [],
+                "attacks": [],
+                "player_q": player_q,
+                "attack_q": attack_q,
+                "server_id": server_id or "",
                 "msg": msg,
                 "error": error,
             },
         )
     with connect() as conn:
         duplicate_groups = duplicate_player_groups(conn)
+        players = search_players(conn, query=player_q, server_id=server)
+        attacks = admin_search_attacks(conn, query=attack_q, server_id=server)
     response = templates.TemplateResponse(
         request,
         "data_management.html",
@@ -737,6 +756,11 @@ def data_management_page(request: Request, password: str | None = None, msg: str
             "authorized": True,
             "password": "",
             "duplicate_groups": duplicate_groups,
+            "players": players,
+            "attacks": attacks,
+            "player_q": player_q,
+            "attack_q": attack_q,
+            "server_id": server_id or "",
             "msg": msg,
             "error": error,
         },
@@ -754,6 +778,125 @@ def merge_duplicate_players_route(request: Request, password: str = Form("")):
         groups = merge_duplicate_players(conn, apply=True)
     merged_count = sum(len(group["duplicate_ids"]) for group in groups)
     return _authorized_admin_redirect("/admin/data", msg=f"Merged {merged_count} duplicate player row(s).")
+
+
+@app.get("/admin/data/players/{player_id:int}/edit", response_class=HTMLResponse)
+def edit_player_page(request: Request, player_id: int, password: str | None = None, msg: str | None = None, error: str | None = None):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Unlock admin before editing data.")
+    with connect() as conn:
+        player = get_player(conn, player_id)
+        history = player_history(conn, player_id, limit=20) if player else []
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    response = templates.TemplateResponse(
+        request,
+        "edit_player.html",
+        {"request": request, "player": player, "history": history, "msg": msg, "error": error},
+    )
+    if password == DELETE_PASSWORD:
+        response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
+
+
+@app.post("/admin/data/players/{player_id:int}/edit")
+def edit_player(
+    request: Request,
+    player_id: int,
+    password: str = Form(""),
+    name: str = Form(""),
+    server_id: str | None = Form(None),
+    current_alliance_tag: str | None = Form(None),
+):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Password is incorrect.")
+    try:
+        with connect() as conn:
+            if not get_player(conn, player_id):
+                raise HTTPException(status_code=404, detail="Player not found")
+            update_player_record(
+                conn,
+                player_id,
+                name=name,
+                server_id=_int_or_none(server_id),
+                current_alliance_tag=(current_alliance_tag or "").strip() or None,
+            )
+    except sqlite3.IntegrityError:
+        return _authorized_admin_redirect(
+            f"/admin/data/players/{player_id}/edit",
+            error="A player with that server and normalized name already exists. Merge duplicates or choose a unique name.",
+        )
+    except ValueError as exc:
+        return _authorized_admin_redirect(f"/admin/data/players/{player_id}/edit", error=str(exc))
+    return _authorized_admin_redirect(f"/admin/data/players/{player_id}/edit", msg="Player updated.")
+
+
+@app.get("/admin/data/attacks/{attack_id:int}/edit", response_class=HTMLResponse)
+def edit_attack_page(request: Request, attack_id: int, password: str | None = None, msg: str | None = None, error: str | None = None):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Unlock admin before editing data.")
+    with connect() as conn:
+        attack = get_attack(conn, attack_id)
+    if not attack:
+        raise HTTPException(status_code=404, detail="Attack not found")
+    response = templates.TemplateResponse(
+        request,
+        "edit_attack.html",
+        {"request": request, "attack": attack, "msg": msg, "error": error},
+    )
+    if password == DELETE_PASSWORD:
+        response.set_cookie(ADMIN_COOKIE, DELETE_PASSWORD, httponly=True, samesite="lax", max_age=60 * 60 * 12)
+    return response
+
+
+@app.post("/admin/data/attacks/{attack_id:int}/edit")
+def edit_attack(
+    request: Request,
+    attack_id: int,
+    password: str = Form(""),
+    attack_type: str = Form(""),
+    attacker_name: str = Form(""),
+    attacker_alliance_tag: str | None = Form(None),
+    defender_name: str | None = Form(None),
+    defender_alliance_tag: str | None = Form(None),
+    server_id: str | None = Form(None),
+    occurred_at_text: str | None = Form(None),
+    notes: str | None = Form(None),
+):
+    if not _is_admin_authorized(request, password):
+        return _admin_redirect("/admin", error="Password is incorrect.")
+    occurred_at = None
+    occurred_text = None
+    if (occurred_at_text or "").strip():
+        occurred_at, occurred_text = _normalize_datetime_value(
+            occurred_at_text.strip(),
+            default_year=datetime.utcnow().year,
+        )
+    try:
+        with connect() as conn:
+            if not get_attack(conn, attack_id):
+                raise HTTPException(status_code=404, detail="Attack not found")
+            update_attack_record(
+                conn,
+                attack_id,
+                attack_type=attack_type,
+                attacker_name=attacker_name,
+                attacker_alliance_tag=(attacker_alliance_tag or "").strip() or None,
+                defender_name=(defender_name or "").strip() or None,
+                defender_alliance_tag=(defender_alliance_tag or "").strip() or None,
+                server_id=_int_or_none(server_id),
+                occurred_at=occurred_at,
+                occurred_at_text=occurred_text,
+                notes=notes,
+            )
+    except sqlite3.IntegrityError:
+        return _authorized_admin_redirect(
+            f"/admin/data/attacks/{attack_id}/edit",
+            error="That edit conflicts with existing player data. Check the server and player names.",
+        )
+    except ValueError as exc:
+        return _authorized_admin_redirect(f"/admin/data/attacks/{attack_id}/edit", error=str(exc))
+    return _authorized_admin_redirect(f"/admin/data/attacks/{attack_id}/edit", msg="Attack updated.")
 
 
 @app.get("/api/attacks")

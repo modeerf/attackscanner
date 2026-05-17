@@ -440,6 +440,34 @@ code {
   align-items: end;
 }
 
+.admin-filter-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 110px auto;
+  gap: 10px;
+  align-items: end;
+  margin: 14px 0;
+}
+
+.admin-edit-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+  margin-top: 18px;
+}
+
+.admin-edit-form button {
+  justify-self: start;
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
+.admin-table-wrap {
+  max-height: 520px;
+}
+
 .button-link {
   display: inline-flex;
   align-items: center;
@@ -459,6 +487,35 @@ code {
   border-color: rgba(158, 198, 93, .45);
   background: rgba(158, 198, 93, .10);
   text-decoration: none;
+}
+
+.compact-link {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: .78rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.status-pill.active {
+  border: 1px solid rgba(158, 198, 93, .45);
+  color: #cfeaa5;
+  background: rgba(158, 198, 93, .12);
+}
+
+.status-pill.deleted {
+  border: 1px solid rgba(224, 124, 97, .48);
+  color: #ffd5c9;
+  background: rgba(224, 124, 97, .13);
 }
 
 .chart-panel {
@@ -736,6 +793,8 @@ button:hover {
 @media (max-width: 860px) {
   .grid.two,
   .search-form,
+  .admin-filter-form,
+  .admin-edit-form,
   .chart-heading,
   .chart-filter-form,
   .summary-grid,

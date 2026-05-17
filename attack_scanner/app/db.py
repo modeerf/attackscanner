@@ -552,6 +552,46 @@ def search_players(conn: sqlite3.Connection, query: str = "", server_id: int | N
     ).fetchall()
 
 
+def admin_search_attacks(
+    conn: sqlite3.Connection,
+    query: str = "",
+    server_id: int | None = None,
+    limit: int = 200,
+) -> list[sqlite3.Row]:
+    query = query.strip()
+    like = f"%{query}%"
+    return conn.execute(
+        """
+        SELECT *
+        FROM attacks
+        WHERE (? IS NULL OR server_id = ?)
+          AND (
+            ? = ''
+            OR CAST(id AS TEXT) = ?
+            OR attack_type LIKE ?
+            OR attacker_name LIKE ?
+            OR attacker_alliance_tag LIKE ?
+            OR defender_name LIKE ?
+            OR defender_alliance_tag LIKE ?
+          )
+        ORDER BY COALESCE(occurred_at, created_at) DESC, id DESC
+        LIMIT ?
+        """,
+        (
+            server_id,
+            server_id,
+            query,
+            query,
+            like,
+            like,
+            like,
+            like,
+            like,
+            limit,
+        ),
+    ).fetchall()
+
+
 def find_player_by_name(conn: sqlite3.Connection, name: str, server_id: int | None = None) -> sqlite3.Row | None:
     normalized = normalize_name(name)
     row = conn.execute(
@@ -577,6 +617,106 @@ def get_player(conn: sqlite3.Connection, player_id: int) -> sqlite3.Row | None:
 
 def get_attack(conn: sqlite3.Connection, attack_id: int) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM attacks WHERE id = ?", (attack_id,)).fetchone()
+
+
+def update_player_record(
+    conn: sqlite3.Connection,
+    player_id: int,
+    *,
+    name: str,
+    server_id: int | None,
+    current_alliance_tag: str | None,
+) -> None:
+    name = name.strip()
+    if not name:
+        raise ValueError("Player name is required.")
+    current_alliance_tag = normalize_alliance_tag(current_alliance_tag)
+    normalized = normalize_name(name)
+    conn.execute(
+        """
+        UPDATE players
+        SET server_id = ?, name = ?, normalized_name = ?, current_alliance_tag = ?
+        WHERE id = ?
+        """,
+        (server_id, name, normalized, current_alliance_tag, player_id),
+    )
+    conn.execute(
+        """
+        UPDATE attacks
+        SET attacker_name = ?, attacker_alliance_tag = ?
+        WHERE attacker_player_id = ?
+        """,
+        (name, current_alliance_tag, player_id),
+    )
+    conn.execute(
+        """
+        UPDATE attacks
+        SET defender_name = ?, defender_alliance_tag = ?
+        WHERE defender_player_id = ?
+        """,
+        (name, current_alliance_tag, player_id),
+    )
+
+
+def update_attack_record(
+    conn: sqlite3.Connection,
+    attack_id: int,
+    *,
+    attack_type: str,
+    attacker_name: str,
+    attacker_alliance_tag: str | None,
+    defender_name: str | None,
+    defender_alliance_tag: str | None,
+    server_id: int | None,
+    occurred_at: str | None,
+    occurred_at_text: str | None,
+    notes: str | None,
+) -> None:
+    attack_type = attack_type.strip()
+    attacker_name = normalize_ocr_player_name(attacker_name).strip()
+    defender_clean = normalize_ocr_player_name(defender_name).strip() if defender_name else None
+    if not attack_type:
+        raise ValueError("Attack type is required.")
+    if not attacker_name:
+        raise ValueError("Attacker name is required.")
+    attacker_alliance_tag = normalize_alliance_tag(attacker_alliance_tag)
+    defender_alliance_tag = normalize_alliance_tag(defender_alliance_tag)
+    attacker = get_or_create_player(conn, attacker_name, server_id=server_id, alliance_tag=attacker_alliance_tag)
+    defender_id = None
+    if defender_clean:
+        defender = get_or_create_player(conn, defender_clean, server_id=server_id, alliance_tag=defender_alliance_tag)
+        defender_id = defender["id"]
+    conn.execute(
+        """
+        UPDATE attacks
+        SET server_id = ?,
+            attack_type = ?,
+            attacker_player_id = ?,
+            attacker_name = ?,
+            attacker_alliance_tag = ?,
+            defender_player_id = ?,
+            defender_name = ?,
+            defender_alliance_tag = ?,
+            occurred_at = ?,
+            occurred_at_text = ?,
+            notes = ?
+        WHERE id = ?
+        """,
+        (
+            server_id,
+            attack_type,
+            attacker["id"],
+            attacker_name,
+            attacker_alliance_tag,
+            defender_id,
+            defender_clean,
+            defender_alliance_tag,
+            occurred_at,
+            occurred_at_text,
+            (notes or "").strip() or None,
+            attack_id,
+        ),
+    )
 
 
 def player_history(conn: sqlite3.Connection, player_id: int, limit: int | None = None) -> list[sqlite3.Row]:

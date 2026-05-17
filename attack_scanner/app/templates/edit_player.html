@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Edit Player - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Edit player #{{ player.id }}</h2>
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+  <p><a href="/admin/data">Back to data management</a></p>
+  <form class="admin-edit-form" method="post" action="/admin/data/players/{{ player.id }}/edit">
+    <label>Name<input type="text" name="name" value="{{ player.name }}" required></label>
+    <label>Alliance tag<input type="text" name="current_alliance_tag" value="{{ player.current_alliance_tag or '' }}" placeholder="Optional"></label>
+    <label>Server<input type="number" name="server_id" value="{{ player.server_id or '' }}" placeholder="Any"></label>
+    <button type="submit">Save player</button>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Recent history</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Type</th>
+          <th>Attacker</th>
+          <th>Defender</th>
+          <th>When</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for attack in history %}
+        <tr>
+          <td>{{ attack.id }}</td>
+          <td>{{ attack.attack_type }}</td>
+          <td>{{ alliance_badge(attack.attacker_alliance_tag, attack.server_id) }} {{ attack.attacker_name }}</td>
+          <td>{% if attack.defender_name %}{{ alliance_badge(attack.defender_alliance_tag, attack.server_id) }} {{ attack.defender_name }}{% else %}-{% endif %}</td>
+          <td>{{ attack.occurred_at_text or attack.occurred_at or attack.created_at }}</td>
+          <td><a class="button-link compact-link" href="/admin/data/attacks/{{ attack.id }}/edit">Edit</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">No attack history found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

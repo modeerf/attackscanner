@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Edit Attack - Last Assylum: Plague Violation Tracker{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Edit attack #{{ attack.id }}</h2>
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+  {% if attack.deleted_at %}
+  <div class="flash err">Deleted at {{ attack.deleted_at }}{% if attack.delete_reason %}: {{ attack.delete_reason }}{% endif %}</div>
+  {% endif %}
+  <p><a href="/admin/data">Back to data management</a> · <a href="/attacks/{{ attack.id }}">View attack</a></p>
+  <form class="admin-edit-form" method="post" action="/admin/data/attacks/{{ attack.id }}/edit">
+    <label>Type
+      <select name="attack_type">
+        {% if attack.attack_type not in ['battle', 'covert_ops', 'caravan'] %}
+        <option value="{{ attack.attack_type }}" selected>{{ attack.attack_type }}</option>
+        {% endif %}
+        <option value="battle" {% if attack.attack_type == 'battle' %}selected{% endif %}>battle</option>
+        <option value="covert_ops" {% if attack.attack_type == 'covert_ops' %}selected{% endif %}>covert_ops</option>
+        <option value="caravan" {% if attack.attack_type == 'caravan' %}selected{% endif %}>caravan</option>
+      </select>
+    </label>
+    <label>Server<input type="number" name="server_id" value="{{ attack.server_id or '' }}" placeholder="Any"></label>
+    <label>Date/time text<input type="text" name="occurred_at_text" value="{{ attack.occurred_at_text or attack.occurred_at or '' }}" placeholder="2026-04-21 10:19:11 or 4-21 16:28"></label>
+
+    <label>Attacker name<input type="text" name="attacker_name" value="{{ attack.attacker_name }}" required></label>
+    <label>Attacker alliance<input type="text" name="attacker_alliance_tag" value="{{ attack.attacker_alliance_tag or '' }}" placeholder="Optional"></label>
+    <label>Defender name<input type="text" name="defender_name" value="{{ attack.defender_name or '' }}" placeholder="Optional"></label>
+    <label>Defender alliance<input type="text" name="defender_alliance_tag" value="{{ attack.defender_alliance_tag or '' }}" placeholder="Optional"></label>
+
+    <label class="full-span">Notes<textarea name="notes" rows="5">{{ attack.notes or '' }}</textarea></label>
+    <button type="submit">Save attack</button>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Source details</h3>
+  <div class="detail-grid">
+    <div><span class="detail-label">Source</span><strong>{{ attack.source_kind }}</strong></div>
+    <div><span class="detail-label">Filename</span><strong>{{ attack.source_filename or '-' }}</strong></div>
+    <div><span class="detail-label">Created</span><strong>{{ attack.created_at }}</strong></div>
+    <div><span class="detail-label">Confidence</span><strong>{{ attack.parser_confidence or '-' }}</strong></div>
+  </div>
+</section>
+{% endblock %}
