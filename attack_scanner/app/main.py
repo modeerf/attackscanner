@@ -365,11 +365,14 @@ def stats_page(request: Request, server_id: str | None = None):
     alliance_filter = _alliance_tag_or_none(request.query_params.get("attacker_alliance"))
     attacker_player_id = _int_or_none(request.query_params.get("attacker_player_id"))
     chart_error = None
+    filter_error = None
     with connect() as conn:
         attackers = top_attackers(conn, server_id=server, limit=10)
         alliances = top_alliances(conn, server_id=server, limit=10)
         attacked_alliances = top_attacked_alliances(conn, server_id=server, limit=10)
         matchups = alliance_matchups(conn, server_id=server, limit=15)
+        filter_alliances = top_alliances(conn, limit=500)
+        filter_attackers = top_attackers(conn, limit=500)
         try:
             # Keep filter menus populated from all active data. The selected filters still
             # constrain the chart query, but the menu choices should not disappear just
@@ -378,6 +381,34 @@ def stats_page(request: Request, server_id: str | None = None):
             player_filters = attacking_player_options(conn, attacker_alliance_tag=alliance_filter)
             if alliance_filter and not player_filters:
                 player_filters = attacking_player_options(conn)
+        except sqlite3.Error as exc:
+            alliance_filters = []
+            player_filters = []
+            filter_error = str(exc)
+
+        if not alliance_filters:
+            alliance_filters = [
+                {
+                    "alliance_tag": row["attacker_alliance_tag"],
+                    "attack_count": row["attack_count"],
+                }
+                for row in filter_alliances
+                if row["attacker_alliance_tag"]
+            ]
+        if not player_filters:
+            player_filters = [
+                {
+                    "player_id": row["attacker_player_id"],
+                    "player_name": row["attacker_name"],
+                    "attacker_alliance_tag": row["attacker_alliance_tag"],
+                    "server_id": row["server_id"],
+                    "attack_count": row["attack_count"],
+                }
+                for row in filter_attackers
+                if not alliance_filter or row["attacker_alliance_tag"] == alliance_filter
+            ]
+
+        try:
             timeline_rows = attack_type_timeline(
                 conn,
                 server_id=server,
@@ -414,6 +445,7 @@ def stats_page(request: Request, server_id: str | None = None):
                 ]
             ),
             "chart_error": chart_error,
+            "filter_error": filter_error,
             "top_alliance": alliances[0] if alliances else None,
             "most_attacked_alliance": attacked_alliances[0] if attacked_alliances else None,
         },

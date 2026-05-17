@@ -50,6 +50,7 @@
       <a class="button-link" href="/stats{% if server_id %}?server_id={{ server_id }}{% endif %}">Reset</a>
     </form>
   </div>
+  {% if filter_error %}<p class="muted chart-error">Filter menus used fallback data: {{ filter_error }}</p>{% endif %}
   <div class="chart-panel">
     <div id="attack-type-chart" class="timeline-chart" aria-live="polite"></div>
   </div>
