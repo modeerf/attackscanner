@@ -34,12 +34,16 @@
         <option value="">All alliances</option>
         {% for alliance in alliance_filters %}
         <option value="{{ alliance.alliance_tag }}" {% if alliance.alliance_tag == attacker_alliance %}selected{% endif %}>[{{ alliance.alliance_tag }}] {{ alliance.attack_count }}</option>
+        {% else %}
+        <option value="" disabled>No attacking alliances found</option>
         {% endfor %}
       </select>
       <select name="attacker_player_id">
         <option value="">All attackers</option>
         {% for player in player_filters %}
         <option value="{{ player.player_id }}" {% if player.player_id == attacker_player_id %}selected{% endif %}>{{ player.player_name }}{% if player.attacker_alliance_tag %} [{{ player.attacker_alliance_tag }}]{% endif %}</option>
+        {% else %}
+        <option value="" disabled>No attackers found</option>
         {% endfor %}
       </select>
       <button type="submit">Apply</button>

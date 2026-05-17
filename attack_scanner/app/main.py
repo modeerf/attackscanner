@@ -371,14 +371,13 @@ def stats_page(request: Request, server_id: str | None = None):
         attacked_alliances = top_attacked_alliances(conn, server_id=server, limit=10)
         matchups = alliance_matchups(conn, server_id=server, limit=15)
         try:
-            alliance_filters = attacking_alliance_options(conn, server_id=server)
-            player_filters = attacking_player_options(conn, server_id=server, attacker_alliance_tag=alliance_filter)
-            if server is not None and not alliance_filters:
-                alliance_filters = attacking_alliance_options(conn)
-            if server is not None and not player_filters:
-                player_filters = attacking_player_options(conn, attacker_alliance_tag=alliance_filter)
+            # Keep filter menus populated from all active data. The selected filters still
+            # constrain the chart query, but the menu choices should not disappear just
+            # because the current server filter is narrow or older rows have no server_id.
+            alliance_filters = attacking_alliance_options(conn)
+            player_filters = attacking_player_options(conn, attacker_alliance_tag=alliance_filter)
             if alliance_filter and not player_filters:
-                player_filters = attacking_player_options(conn, server_id=server)
+                player_filters = attacking_player_options(conn)
             timeline_rows = attack_type_timeline(
                 conn,
                 server_id=server,
@@ -402,8 +401,8 @@ def stats_page(request: Request, server_id: str | None = None):
             "alliances": alliances,
             "attacked_alliances": attacked_alliances,
             "matchups": matchups,
-            "alliance_filters": alliance_filters,
-            "player_filters": player_filters,
+            "alliance_filters": [dict(row) for row in alliance_filters],
+            "player_filters": [dict(row) for row in player_filters],
             "timeline_json": json.dumps(
                 [
                     {
