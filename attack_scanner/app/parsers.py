@@ -27,6 +27,11 @@ OPS_THEFT_WORDS = (
     "rob",
     "robo",
     "robo",
+    "ukral",
+    "ykpa",
+    "украл",
+    "украли",
+    "украден",
     "recompensa",
     "recompensas",
     "quest reward",
@@ -45,6 +50,17 @@ OPS_CONTEXT_WORDS = (
     "stole",
     "quest",
     "reward",
+    "secret operation",
+    "ops report",
+    "tavhon",
+    "onepa",
+    "otue",
+    "отчет",
+    "отчёт",
+    "тайн",
+    "операц",
+    "наград",
+    "задан",
     "rob",
     "robo",
     "recompensa",
@@ -697,6 +713,9 @@ def _parse_name_fragment(fragment: str) -> tuple[str | None, str]:
     match = MERGED_NAME_RE.match(fragment)
     if match:
         return match.group("tag"), normalize_ocr_player_name(match.group("name"))
+    match = re.match(r"^\[(?P<tag>[A-Za-z0-9]+)[\]\|Il1]\s*(?P<name>[A-Za-z0-9_\-]+)$", fragment)
+    if match:
+        return match.group("tag"), normalize_ocr_player_name(match.group("name"))
     match = re.match(r"^\[(?P<tag>[A-Za-z0-9]+)\]\s+(?P<name>[A-Za-z0-9_\-]+)$", fragment)
     if match:
         return match.group("tag"), normalize_ocr_player_name(match.group("name"))
@@ -712,6 +731,24 @@ def normalize_ocr_player_name(name: str) -> str:
 
 def _event_key(event: ParsedAttackEvent) -> tuple[str, str | None, str | None]:
     return (event.attacker_name.lower(), event.attacker_alliance_tag, event.occurred_at_text)
+
+
+def _dedupe_ops_events(events: list[ParsedAttackEvent]) -> list[ParsedAttackEvent]:
+    best: dict[tuple[str, str | None], ParsedAttackEvent] = {}
+    for event in events:
+        key = (event.attacker_name.lower(), event.attacker_alliance_tag)
+        current = best.get(key)
+        if current is None:
+            best[key] = event
+            continue
+        current_has_time = bool(current.occurred_at_text)
+        event_has_time = bool(event.occurred_at_text)
+        if event_has_time and not current_has_time:
+            best[key] = event
+            continue
+        if event_has_time == current_has_time and event.parser_confidence > current.parser_confidence:
+            best[key] = event
+    return list(best.values())
 
 
 def parse_caravan_report(image_bytes: bytes, default_year: int | None = None, fallback_server_id: int | None = None) -> list[ParsedAttackEvent]:
@@ -848,6 +885,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
                 continue
             seen.add(key)
             events.append(event)
+    events = _dedupe_ops_events(events)
     if not events:
         raise ParseError("Could not find any red attacker names in the covert ops image.")
     return events
@@ -855,7 +893,7 @@ def parse_ops_report(image_bytes: bytes, default_year: int | None = None, fallba
 
 def find_tagged_names(text: str) -> list[str]:
     matches: list[str] = []
-    for match in re.finditer(r"\[(?P<tag>[^\]\s]+)\]\s*(?P<name>[^\s\[\]]+)", text):
+    for match in re.finditer(r"\[(?P<tag>[A-Za-z0-9]{2,12})[\]\|Il1]\s*(?P<name>[^\s\[\]]+)", text):
         name = match.group("name").strip().strip(".,;:!?)")
         if not name:
             continue

@@ -41,13 +41,14 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_LANGUAGE = "en-US"
-SUPPORTED_LANGUAGES = ("en-US", "en-AU", "fr", "es", "pt")
+SUPPORTED_LANGUAGES = ("en-US", "en-AU", "fr", "es", "pt", "ru")
 LANGUAGE_LABELS = {
     "en-US": "English (US)",
     "en-AU": "English (Australia)",
     "fr": "Francais",
     "es": "Espanol",
     "pt": "Portugues",
+    "ru": "Русский",
 }
 
 ENGLISH_TEXT = {
@@ -66,7 +67,7 @@ ENGLISH_TEXT = {
     ),
     "language_current": "Your bot language is **{language}**.",
     "language_updated": "Bot language set to **{language}**.",
-    "language_usage": "Usage: `@Bot language auto|en-US|en-AU|fr|es|pt`. Languages: {languages}.",
+    "language_usage": "Usage: `@Bot language auto|en-US|en-AU|fr|es|pt|ru`. Languages: {languages}.",
     "top_alliance": "Top alliance: **[{tag}]** with **{attackers}** attacker(s) and **{attacks}** recorded attack(s).",
     "most_attacked": "Most attacked alliance: **[{tag}]** with **{attacks}** attack(s) received.",
     "top_attackers": "Top attackers:",
@@ -110,7 +111,7 @@ DISCORD_TEXT: dict[str, dict[str, str]] = {
         ),
         "language_current": "Votre langue du bot est **{language}**.",
         "language_updated": "Langue du bot definie sur **{language}**.",
-        "language_usage": "Utilisation : `@Bot language auto|en-US|en-AU|fr|es|pt`. Langues : {languages}.",
+        "language_usage": "Utilisation : `@Bot language auto|en-US|en-AU|fr|es|pt|ru`. Langues : {languages}.",
         "top_alliance": "Meilleure alliance : **[{tag}]** avec **{attackers}** attaquant(s) et **{attacks}** attaque(s) enregistree(s).",
         "most_attacked": "Alliance la plus attaquee : **[{tag}]** avec **{attacks}** attaque(s) recue(s).",
         "top_attackers": "Meilleurs attaquants :",
@@ -150,7 +151,7 @@ DISCORD_TEXT: dict[str, dict[str, str]] = {
         ),
         "language_current": "Tu idioma del bot es **{language}**.",
         "language_updated": "Idioma del bot configurado como **{language}**.",
-        "language_usage": "Uso: `@Bot language auto|en-US|en-AU|fr|es|pt`. Idiomas: {languages}.",
+        "language_usage": "Uso: `@Bot language auto|en-US|en-AU|fr|es|pt|ru`. Idiomas: {languages}.",
         "top_alliance": "Alianza principal: **[{tag}]** con **{attackers}** atacante(s) y **{attacks}** ataque(s) registrado(s).",
         "most_attacked": "Alianza mas atacada: **[{tag}]** con **{attacks}** ataque(s) recibido(s).",
         "top_attackers": "Principales atacantes:",
@@ -190,7 +191,7 @@ DISCORD_TEXT: dict[str, dict[str, str]] = {
         ),
         "language_current": "Seu idioma do bot e **{language}**.",
         "language_updated": "Idioma do bot definido como **{language}**.",
-        "language_usage": "Uso: `@Bot language auto|en-US|en-AU|fr|es|pt`. Idiomas: {languages}.",
+        "language_usage": "Uso: `@Bot language auto|en-US|en-AU|fr|es|pt|ru`. Idiomas: {languages}.",
         "top_alliance": "Principal alianca: **[{tag}]** com **{attackers}** atacante(s) e **{attacks}** ataque(s) registrado(s).",
         "most_attacked": "Alianca mais atacada: **[{tag}]** com **{attacks}** ataque(s) recebido(s).",
         "top_attackers": "Principais atacantes:",
@@ -214,6 +215,46 @@ DISCORD_TEXT: dict[str, dict[str, str]] = {
         "pending": "pendente",
         "image": "imagem",
     },
+    "ru": {
+        "missing_detail": "Мне нужно чуть больше деталей для этой команды. Попробуйте `@Bot stats`, `@Bot recent limit=10` или `@Bot history PlayerName`.",
+        "command_failed": "Не удалось выполнить команду: {error}",
+        "scan_unexpected_error": "Произошла ошибка при обработке этого изображения.",
+        "online_hint": "Я онлайн. Попробуйте `@Bot stats`, `@Bot recent limit=10`, `@Bot history PlayerName`, или упомяните меня с изображением и `battle`, `ops victim=AVL` или `caravan`.",
+        "pong": "понг",
+        "scanhelp": "\n".join(
+            [
+                "Упомяните меня и прикрепите одно или несколько изображений для сканирования.",
+                "Используйте `battle` для боевых отчетов, `ops` для тайных операций или `caravan` для атак караванов.",
+                "Для ops можно указать альянс жертвы: `victim=AVL`, `victim_alliance=AVL` или `defender_alliance=AVL`.",
+                "Примеры: `@Bot ops victim=AVL server=78 year=2026`, `@Bot caravan server=78` или `@Bot battle server=78`.",
+            ]
+        ),
+        "language_current": "Ваш язык бота: **{language}**.",
+        "language_updated": "Язык бота установлен: **{language}**.",
+        "language_usage": "Использование: `@Bot language auto|en-US|en-AU|fr|es|pt|ru`. Языки: {languages}.",
+        "top_alliance": "Главный альянс: **[{tag}]** с **{attackers}** атакующим(и) и **{attacks}** записанными атак(ами).",
+        "most_attacked": "Самый атакуемый альянс: **[{tag}]** с **{attacks}** полученными атак(ами).",
+        "top_attackers": "Главные атакующие:",
+        "attacker_row": "{idx}. {tag}{name} - всего {total} ({battle} бой / {ops} ops)",
+        "no_attack_data": "Данных атак пока нет.",
+        "no_recent": "Недавние атаки не найдены.",
+        "history_usage": "Использование: @Bot history <имя игрока> [server=78] [limit=10]",
+        "player_not_found": "Игрок не найден: {name}",
+        "no_history": "История для {name} не записана.",
+        "history_header": "История для **{name}** (сервер {server}):",
+        "history_attacked": "#{id} АТАКОВАЛ {other} [{type}] @ {when}",
+        "history_defended": "#{id} ЗАЩИЩАЛСЯ против {other} [{type}] @ {when}",
+        "duplicate_image": "{filename}: это изображение уже было отправлено.",
+        "saved_line": "{filename}: сохранено {count} событ(ий) для {names} (ID: {ids})",
+        "processed_upload": "Загрузка изображения обработана.",
+        "saved_header": "Сохранено:",
+        "alerts_header": "Оповещения альянсов:",
+        "errors_header": "Ошибки:",
+        "commands_hint": "Команды: `@Bot stats`, `@Bot recent limit=10`, `@Bot history Holash server=78`. Сканирование изображений может включать `battle`, `ops victim=AVL` или `caravan`.",
+        "violation_recorded": "{target}: нарушение записано из {source} (ID атак: {ids}).",
+        "pending": "ожидает",
+        "image": "изображение",
+    },
 }
 
 
@@ -231,6 +272,8 @@ def normalize_language(raw: object | None) -> str:
         return "es"
     if value.startswith("pt") or value in {"portuguese", "portugues"}:
         return "pt"
+    if value.startswith("ru") or value in {"russian", "russkiy", "russkii", "русский"}:
+        return "ru"
     return DEFAULT_LANGUAGE
 
 
@@ -243,6 +286,8 @@ def is_supported_language(raw: object | None) -> bool:
     if value.startswith("es") or value in {"spanish", "espanol"}:
         return True
     if value.startswith("pt") or value in {"portuguese", "portugues"}:
+        return True
+    if value.startswith("ru") or value in {"russian", "russkiy", "russkii", "русский"}:
         return True
     return False
 
@@ -268,8 +313,8 @@ def language_for_user(conn: sqlite3.Connection, user_id: int | str, source: comm
     return detected
 
 
-def t(language: str, key: str, **values: object) -> str:
-    template = DISCORD_TEXT.get(language, {}).get(key) or DISCORD_TEXT.get(DEFAULT_LANGUAGE, {}).get(key) or ENGLISH_TEXT[key]
+def t(lang_code: str, key: str, **values: object) -> str:
+    template = DISCORD_TEXT.get(lang_code, {}).get(key) or DISCORD_TEXT.get(DEFAULT_LANGUAGE, {}).get(key) or ENGLISH_TEXT[key]
     return template.format(**values)
 
 
@@ -391,7 +436,7 @@ def build_bot() -> commands.Bot:
             lang = language_for_user(conn, ctx.author.id, ctx)
         await ctx.reply(t(lang, "scanhelp"))
 
-    @bot.command(name="language", aliases=["lang", "locale", "langue", "idioma"], help="Set your bot language. Example: @Bot language es")
+    @bot.command(name="language", aliases=["lang", "locale", "langue", "idioma", "yazyk", "язык"], help="Set your bot language. Example: @Bot language ru")
     async def language_command(ctx: commands.Context, language: str | None = None) -> None:
         with connect() as conn:
             current = language_for_user(conn, ctx.author.id, ctx)
